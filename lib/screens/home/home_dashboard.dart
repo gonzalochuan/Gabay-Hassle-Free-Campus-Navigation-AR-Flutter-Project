@@ -1,0 +1,397 @@
+import 'dart:ui';
+
+import 'package:flutter/material.dart';
+import '../navigate/navigate_screen.dart';
+import '../room_scanner/room_scanner_screen.dart';
+import '../news/news_feed_screen.dart';
+import '../emergency/emergency_screen.dart';
+import '../dept_hours/dept_hours_screen.dart';
+
+class HomeDashboard extends StatelessWidget {
+  const HomeDashboard({super.key, this.userName = 'Gonzalo Chuan'});
+
+  final String userName;
+
+  @override
+  Widget build(BuildContext context) {
+    final screenH = MediaQuery.of(context).size.height;
+    final cardHeight = screenH < 700 ? 184.0 : 200.0;
+    return Scaffold(
+      extendBodyBehindAppBar: true,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Background image with blur/overlay
+          _Background(),
+          // Foreground scrollable content
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _HeaderCard(userName: userName),
+                  const SizedBox(height: 20),
+                  // Grid of quick access cards (2x2)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _FeatureCard(
+                          title: 'Navigation',
+                          description:
+                              'Navigate campus with 2D maps or AR arrows.',
+                          assetPath: '',
+                          fallbackIcon: Icons.near_me,
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => NavigateScreen(),
+                              ),
+                            );
+                          },
+                          height: cardHeight,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _FeatureCard(
+                          title: 'Room Scanner',
+                          description:
+                              'Scan room QR codes for schedules and availability.',
+                          assetPath: '',
+                          fallbackIcon: Icons.qr_code_scanner,
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => RoomScannerScreen(),
+                              ),
+                            );
+                          },
+                          height: cardHeight,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _FeatureCard(
+                          title: 'News Feed',
+                          description:
+                              'Stay updated with announcements, events and reminders.',
+                          assetPath: '',
+                          fallbackIcon: Icons.article,
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => NewsFeedScreen(),
+                              ),
+                            );
+                          },
+                          height: cardHeight,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _FeatureCard(
+                          title: 'Emergency',
+                          description:
+                              'View evacuation routes, safe exits, and emergency contacts.',
+                          assetPath: '',
+                          fallbackIcon: Icons.warning_amber_rounded,
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => EmergencyScreen(),
+                              ),
+                            );
+                          },
+                          height: cardHeight,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  // Full-width card for Dept Hours
+                  _FeatureCard(
+                    title: 'Department Hours',
+                    description:
+                        'Check office schedules and open or close times to plan your visits and avoid waiting.',
+                    assetPath: '',
+                    fallbackIcon: Icons.event_available,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => DeptHoursScreen(),
+                        ),
+                      );
+                    },
+                    fullWidth: true,
+                    height: cardHeight,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Background extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image.asset(
+          'assets/image/home_bg.jpg',
+          fit: BoxFit.cover,
+          errorBuilder: (c, e, s) {
+            return Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFF63C1E3), Color(0xFF1E2931)],
+                ),
+              ),
+            );
+          },
+        ),
+        // Optional extra blur to emphasize glassmorphism
+        BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 2, sigmaY: 2),
+          child: Container(color: Colors.black.withOpacity(0)),
+        ),
+      ],
+    );
+  }
+}
+
+class _HeaderCard extends StatelessWidget {
+  const _HeaderCard({required this.userName});
+  final String userName;
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassContainer(
+      radius: 28,
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _CircleBadge(assetPath: 'assets/image/homelogo.png', fallbackIcon: Icons.place),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Welcome, $userName',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'There are quick access cards to navigate wherever you go',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          const _CircleBadge(fallbackIcon: Icons.person_outline),
+        ],
+      ),
+    );
+  }
+}
+
+class _FeatureCard extends StatelessWidget {
+  const _FeatureCard({
+    required this.title,
+    required this.description,
+    required this.assetPath,
+    required this.fallbackIcon,
+    required this.onTap,
+    this.fullWidth = false,
+    this.height = 200,
+  });
+
+  final String title;
+  final String description;
+  final String assetPath;
+  final IconData fallbackIcon;
+  final VoidCallback onTap;
+  final bool fullWidth;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _IconBadge(assetPath: assetPath, fallbackIcon: fallbackIcon),
+        const SizedBox(height: 12),
+        Text(
+          title,
+          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          description,
+          style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.4),
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: _EnterButton(onTap: onTap),
+        ),
+      ],
+    );
+
+    return _GlassContainer(
+      radius: 28,
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: height),
+        child: content,
+      ),
+    );
+  }
+}
+
+class _EnterButton extends StatelessWidget {
+  const _EnterButton({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(28),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF63C1E3).withOpacity(0.9),
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF63C1E3).withOpacity(0.35),
+              blurRadius: 12,
+              offset: const Offset(0, 6),
+            )
+          ],
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Enter', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+            SizedBox(width: 8),
+            Icon(Icons.arrow_right_alt, color: Colors.white),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GlassContainer extends StatelessWidget {
+  const _GlassContainer({
+    required this.child,
+    this.radius = 24,
+    this.padding = const EdgeInsets.all(16),
+  });
+
+  final Widget child;
+  final double radius;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(radius),
+            border: Border.all(color: Colors.white.withOpacity(0.25), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.20),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          padding: padding,
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+class _IconBadge extends StatelessWidget {
+  const _IconBadge({required this.assetPath, required this.fallbackIcon});
+  final String assetPath;
+  final IconData fallbackIcon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 56,
+      height: 65,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withOpacity(0.25)),
+      ),
+      alignment: Alignment.center,
+      child: Icon(fallbackIcon, color: Colors.white, size: 32),
+    );
+  }
+}
+
+class _CircleBadge extends StatelessWidget {
+  const _CircleBadge({this.assetPath, this.fallbackIcon});
+  final String? assetPath;
+  final IconData? fallbackIcon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.14),
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white.withOpacity(0.25)),
+      ),
+      alignment: Alignment.center,
+      child: assetPath != null
+          ? Image.asset(
+              assetPath!,
+              width: 24,
+              height: 24,
+              fit: BoxFit.contain,
+              errorBuilder: (c, e, s) => Icon(fallbackIcon ?? Icons.circle, color: Colors.white),
+            )
+          : Icon(fallbackIcon ?? Icons.circle, color: Colors.white),
+    );
+  }
+}
