@@ -146,20 +146,14 @@ class _Background extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        Image.asset(
-          'assets/image/home_bg.jpg',
-          fit: BoxFit.cover,
-          errorBuilder: (c, e, s) {
-            return Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xFF63C1E3), Color(0xFF1E2931)],
-                ),
-              ),
-            );
-          },
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF63C1E3), Color(0xFF1E2931)],
+            ),
+          ),
         ),
         // Optional extra blur to emphasize glassmorphism
         BackdropFilter(

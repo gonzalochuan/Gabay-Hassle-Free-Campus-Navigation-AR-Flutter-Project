@@ -1,7 +1,6 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../widgets/glass_container.dart';
 
 class NavigateScreen extends StatefulWidget {
@@ -99,54 +98,35 @@ class _NavigateScreenState extends State<NavigateScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  // Google Map (prototype) centered on SEAIT
+                  // Map placeholder with route (mock only)
                   GlassContainer(
                     padding: const EdgeInsets.all(0),
                     child: SizedBox(
                       height: mapHeight,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: Builder(
-                          builder: (context) {
-                            // SEAIT approximate coordinates from user's embed
-                            const seait = LatLng(6.34654726199553, 124.93617452002388);
-                            final you = Marker(
-                              markerId: const MarkerId('you'),
-                              position: const LatLng(6.34648, 124.93610),
-                              infoWindow: const InfoWindow(title: 'You'),
-                            );
-                            final dest = Marker(
-                              markerId: const MarkerId('dest'),
-                              position: const LatLng(6.34662, 124.93628),
-                              infoWindow: const InfoWindow(title: 'Destination'),
-                            );
-                            final route = Polyline(
-                              polylineId: const PolylineId('route'),
-                              color: const Color(0xFF63C1E3),
-                              width: 4,
-                              points: const [
-                                LatLng(6.34648, 124.93610),
-                                LatLng(6.34653, 124.93615),
-                                LatLng(6.34657, 124.93620),
-                                LatLng(6.34660, 124.93625),
-                                LatLng(6.34662, 124.93628),
-                              ],
-                            );
-                            return GoogleMap(
-                              initialCameraPosition: const CameraPosition(
-                                target: seait,
-                                zoom: 19,
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.white.withOpacity(0.06),
+                                    Colors.black.withOpacity(0.06),
+                                  ],
+                                ),
                               ),
-                              markers: {you, dest},
-                              polylines: {route},
-                              compassEnabled: false,
-                              mapToolbarEnabled: false,
-                              myLocationButtonEnabled: false,
-                              zoomControlsEnabled: false,
-                              buildingsEnabled: true,
-                            );
-                          },
-                        ),
+                              alignment: Alignment.center,
+                              child: const Text('MAP Google HERE 2D', style: TextStyle(color: Colors.white54)),
+                            ),
+                          ),
+                          Positioned.fill(
+                            child: CustomPaint(
+                              painter: _RoutePainter(),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -264,20 +244,14 @@ class _Background extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        Image.asset(
-          'assets/image/home_bg.jpg',
-          fit: BoxFit.cover,
-          errorBuilder: (c, e, s) {
-            return Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xFF63C1E3), Color(0xFF1E2931)],
-                ),
-              ),
-            );
-          },
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF63C1E3), Color(0xFF1E2931)],
+            ),
+          ),
         ),
         BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 2, sigmaY: 2),

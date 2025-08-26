@@ -1,15 +1,387 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../widgets/glass_container.dart';
 
-class DeptHoursScreen extends StatelessWidget {
+class DeptHoursScreen extends StatefulWidget {
   const DeptHoursScreen({super.key});
+
+  @override
+  State<DeptHoursScreen> createState() => _DeptHoursScreenState();
+}
+
+class _DeptHoursScreenState extends State<DeptHoursScreen> {
+  static const Color _accent = Color(0xFF63C1E3);
+
+  final List<_Department> _allDepts = _mockDepartments;
+  String _query = '';
+  int _selectedDayIndex = DateTime.now().weekday % 7; // 0=Sun..6=Sat
+
+  List<_Department> get _filtered {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return _allDepts;
+    return _allDepts
+        .where((d) => d.name.toLowerCase().contains(q) || d.location.toLowerCase().contains(q))
+        .toList();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Department Hours')),
-      body: const Center(
-        child: Text('List + detail with today\'s status (placeholder)'),
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: const Text('Department Hours'),
+        foregroundColor: Colors.white,
       ),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          const _Background(),
+          SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              children: [
+                GlassContainer(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.search, color: Colors.white70),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          decoration: const InputDecoration(
+                            hintText: 'Search department or office',
+                            hintStyle: TextStyle(color: Colors.white70),
+                            border: InputBorder.none,
+                            isDense: true,
+                          ),
+                          style: const TextStyle(color: Colors.white),
+                          onChanged: (v) => setState(() => _query = v),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                GlassContainer(
+                  padding: const EdgeInsets.all(12),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (int i = 0; i < _days.length; i++) ...[
+                          _DayChip(
+                            label: _days[i],
+                            selected: _selectedDayIndex == i,
+                            onTap: () => setState(() => _selectedDayIndex = i),
+                          ),
+                          if (i != _days.length - 1) const SizedBox(width: 8),
+                        ]
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (_filtered.isEmpty)
+                  const Center(
+                    child: Text('No departments found', style: TextStyle(color: Colors.white70)),
+                  )
+                else ...[
+                  for (final dept in _filtered) ...[
+                    _DeptCard(
+                      dept: dept,
+                      dayIndex: _selectedDayIndex,
+                      accent: _accent,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ]
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeptCard extends StatelessWidget {
+  const _DeptCard({required this.dept, required this.dayIndex, required this.accent});
+  final _Department dept;
+  final int dayIndex; // 0=Sun..6=Sat
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final todayRanges = dept.weeklyHours[dayIndex] ?? const <_TimeRange>[];
+    final status = _statusFor(todayRanges, DateTime.now());
+    final isOpen = status.isOpen;
+    final statusText = isOpen ? 'Open now' : 'Closed';
+    final statusColor = isOpen ? accent : const Color(0xFFEF4444);
+
+    return GlassContainer(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white.withOpacity(0.25)),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(Icons.apartment_rounded, color: Colors.white),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            dept.name,
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: statusColor.withOpacity(0.18),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: statusColor.withOpacity(0.6)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(isOpen ? Icons.access_time : Icons.lock_clock, color: statusColor, size: 16),
+                              const SizedBox(width: 6),
+                              Text(statusText, style: TextStyle(color: statusColor, fontWeight: FontWeight.w700)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.place_outlined, color: Colors.white70, size: 16),
+                        const SizedBox(width: 6),
+                        Flexible(child: Text(dept.location, style: const TextStyle(color: Colors.white70))),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text('Today\'s Hours', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          if (todayRanges.isEmpty)
+            const Text('Closed today', style: TextStyle(color: Colors.white70))
+          else
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final tr in todayRanges)
+                  Text(_formatRange(tr), style: const TextStyle(color: Colors.white70)),
+              ],
+            ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              TextButton.icon(
+                onPressed: () {},
+                icon: const Icon(Icons.call, color: Colors.white),
+                label: const Text('Call', style: TextStyle(color: Colors.white)),
+                style: TextButton.styleFrom(foregroundColor: Colors.white),
+              ),
+              const SizedBox(width: 8),
+              TextButton.icon(
+                onPressed: () {},
+                icon: const Icon(Icons.map_outlined, color: Colors.white),
+                label: const Text('Directions', style: TextStyle(color: Colors.white)),
+                style: TextButton.styleFrom(foregroundColor: Colors.white),
+              ),
+            ],
+          )
+        ],
+      ),
+    );
+  }
+
+  static String _formatRange(_TimeRange tr) => '${tr.start} - ${tr.end}';
+
+  static _OpenStatus _statusFor(List<_TimeRange> ranges, DateTime now) {
+    if (ranges.isEmpty) return const _OpenStatus(false);
+    final hm = now.hour * 60 + now.minute;
+    for (final r in ranges) {
+      final start = _toMinutes(r.start);
+      final end = _toMinutes(r.end);
+      if (hm >= start && hm < end) return const _OpenStatus(true);
+    }
+    return const _OpenStatus(false);
+  }
+
+  static int _toMinutes(String hhmm) {
+    final parts = hhmm.split(':');
+    final h = int.tryParse(parts[0]) ?? 0;
+    final m = int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0;
+    return h * 60 + m;
+  }
+}
+
+class _DayChip extends StatelessWidget {
+  const _DayChip({required this.label, required this.selected, required this.onTap});
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final sel = selected;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: sel ? Colors.white.withOpacity(0.2) : Colors.white.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.white.withOpacity(sel ? 0.6 : 0.25)),
+        ),
+        child: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+      ),
+    );
+  }
+}
+
+class _OpenStatus {
+  const _OpenStatus(this.isOpen);
+  final bool isOpen;
+}
+
+class _TimeRange {
+  const _TimeRange(this.start, this.end);
+  final String start; // HH:MM 24h
+  final String end;   // HH:MM 24h
+}
+
+class _Department {
+  const _Department({required this.name, required this.location, required this.weeklyHours, this.phone});
+  final String name;
+  final String location;
+  final Map<int, List<_TimeRange>> weeklyHours; // key: 0=Sun..6=Sat
+  final String? phone;
+}
+
+const List<String> _days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+const List<_Department> _mockDepartments = [
+  _Department(
+    name: 'Registrar\'s Office',
+    location: 'Admin Building, Room 101',
+    weeklyHours: {
+      1: [ _TimeRange('08:00', '12:00'), _TimeRange('13:00', '17:00') ],
+      2: [ _TimeRange('08:00', '12:00'), _TimeRange('13:00', '17:00') ],
+      3: [ _TimeRange('08:00', '12:00'), _TimeRange('13:00', '17:00') ],
+      4: [ _TimeRange('08:00', '12:00'), _TimeRange('13:00', '17:00') ],
+      5: [ _TimeRange('08:00', '12:00'), _TimeRange('13:00', '16:00') ],
+    },
+    phone: '555-1234',
+  ),
+  _Department(
+    name: 'Admissions',
+    location: 'Student Services Center, Level 2',
+    weeklyHours: {
+      1: [ _TimeRange('09:00', '12:00'), _TimeRange('13:00', '16:00') ],
+      2: [ _TimeRange('09:00', '12:00'), _TimeRange('13:00', '16:00') ],
+      3: [ _TimeRange('09:00', '12:00'), _TimeRange('13:00', '16:00') ],
+      4: [ _TimeRange('09:00', '12:00'), _TimeRange('13:00', '16:00') ],
+      5: [ _TimeRange('09:00', '15:00') ],
+    },
+    phone: '555-5678',
+  ),
+  _Department(
+    name: 'Library',
+    location: 'Main Library, Ground Floor',
+    weeklyHours: {
+      0: [ _TimeRange('10:00', '16:00') ],
+      1: [ _TimeRange('08:00', '20:00') ],
+      2: [ _TimeRange('08:00', '20:00') ],
+      3: [ _TimeRange('08:00', '20:00') ],
+      4: [ _TimeRange('08:00', '20:00') ],
+      5: [ _TimeRange('08:00', '18:00') ],
+      6: [ _TimeRange('10:00', '16:00') ],
+    },
+    phone: '555-2468',
+  ),
+  _Department(
+    name: 'Cashier',
+    location: 'Finance Office, Room 203',
+    weeklyHours: {
+      1: [ _TimeRange('08:30', '12:00'), _TimeRange('13:00', '16:30') ],
+      2: [ _TimeRange('08:30', '12:00'), _TimeRange('13:00', '16:30') ],
+      3: [ _TimeRange('08:30', '12:00'), _TimeRange('13:00', '16:30') ],
+      4: [ _TimeRange('08:30', '12:00'), _TimeRange('13:00', '16:30') ],
+      5: [ _TimeRange('08:30', '15:00') ],
+    },
+  ),
+  _Department(
+    name: 'Clinic',
+    location: 'Health Services, Ground Floor',
+    weeklyHours: {
+      1: [ _TimeRange('08:00', '17:00') ],
+      2: [ _TimeRange('08:00', '17:00') ],
+      3: [ _TimeRange('08:00', '17:00') ],
+      4: [ _TimeRange('08:00', '17:00') ],
+      5: [ _TimeRange('08:00', '17:00') ],
+    },
+    phone: '555-1357',
+  ),
+  _Department(
+    name: 'IT Helpdesk',
+    location: 'Tech Hub, Room 310',
+    weeklyHours: {
+      1: [ _TimeRange('08:00', '18:00') ],
+      2: [ _TimeRange('08:00', '18:00') ],
+      3: [ _TimeRange('08:00', '18:00') ],
+      4: [ _TimeRange('08:00', '18:00') ],
+      5: [ _TimeRange('08:00', '18:00') ],
+    },
+    phone: '555-9999',
+  ),
+];
+
+class _Background extends StatelessWidget {
+  const _Background();
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF63C1E3), Color(0xFF1E2931)],
+            ),
+          ),
+        ),
+        BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 2, sigmaY: 2),
+          child: Container(color: Colors.black.withOpacity(0)),
+        ),
+      ],
     );
   }
 }

@@ -1,6 +1,8 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'screens/home/home_dashboard.dart';
+import 'widgets/glass_container.dart';
 
 void main() {
   runApp(const MyApp());
@@ -53,7 +55,7 @@ class _MyHomePageState extends State<MyHomePage> {
                   'GABAY: Smart Campus Navigation System',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: Colors.white70,
+                    color: Colors.white,
                     fontSize: 14,
                     letterSpacing: 0.4,
                   ),
@@ -62,28 +64,33 @@ class _MyHomePageState extends State<MyHomePage> {
               const Spacer(flex: 3),
               Padding(
                 padding: const EdgeInsets.only(bottom: 32.0),
-                child: SizedBox(
-                  width: 260,
-                  height: 56,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const SignUpScreen(),
+                child: GlassContainer(
+                  radius: 32,
+                  padding: EdgeInsets.zero,
+                  child: SizedBox(
+                    width: 260,
+                    height: 56,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const SignUpScreen(),
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        foregroundColor: Colors.white,
+                        shadowColor: Colors.transparent,
+                        elevation: 0,
+                        shape: const StadiumBorder(),
+                        textStyle: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
                         ),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFD9E2E8),
-                      foregroundColor: const Color(0xFF1E2931),
-                      elevation: 2,
-                      shape: const StadiumBorder(),
-                      textStyle: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
                       ),
+                      child: const Text('Get Started'),
                     ),
-                    child: const Text('Get Started'),
                   ),
                 ),
               ),
@@ -119,16 +126,19 @@ class _SignUpScreenState extends State<SignUpScreen> {
   InputDecoration _roundedInputDecoration({required String hint, required Widget icon}) {
     return InputDecoration(
       hintText: hint,
+      hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
       prefixIcon: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: icon),
       prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
       contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+      filled: true,
+      fillColor: Colors.white.withOpacity(0.18),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(28),
-        borderSide: const BorderSide(color: Color(0xFF1E1E1E), width: 1),
+        borderSide: BorderSide(color: Colors.white.withOpacity(0.20), width: 1),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(28),
-        borderSide: const BorderSide(color: Color(0xFF1E1E1E), width: 1.2),
+        borderSide: BorderSide(color: Colors.white.withOpacity(0.35), width: 1.2),
       ),
     );
   }
@@ -136,11 +146,27 @@ class _SignUpScreenState extends State<SignUpScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF63C1E3),
-      body: SafeArea(
-        top: true,
-        bottom: false,
-        child: Column(
+      backgroundColor: Colors.transparent,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFF63C1E3), Color(0xFF1E2931)],
+              ),
+            ),
+          ),
+          BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 2, sigmaY: 2),
+            child: Container(color: Colors.white.withOpacity(0)),
+          ),
+          SafeArea(
+            top: true,
+            bottom: false,
+            child: Column(
           children: [
             const SizedBox(height: 24),
             // Top header with logo and description
@@ -148,64 +174,66 @@ class _SignUpScreenState extends State<SignUpScreen> {
             const SizedBox(height: 12),
             const Text(
               'GABAY: Smart Campus Navigation System',
-              style: TextStyle(color: Colors.white70, fontSize: 13),
+              style: TextStyle(color: Colors.white, fontSize: 13),
             ),
             const SizedBox(height: 24),
-            // White rounded container sticks to bottom and fills remaining space
+            // Glassmorphic container sticks to bottom and fills remaining space
             Expanded(
-              child: Container(
-                width: double.infinity,
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(28),
-                    topRight: Radius.circular(28),
-                  ),
-                ),
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(
-                    20,
-                    28,
-                    20,
-                    // Add extra bottom padding when keyboard is open
-                    (MediaQuery.of(context).viewInsets.bottom > 0)
-                        ? MediaQuery.of(context).viewInsets.bottom + 20
-                        : 32,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                    const Align(
-                      alignment: Alignment.center,
-                      child: Text(
-                        'Hello!',
-                        style: TextStyle(fontSize: 24, fontStyle: FontStyle.italic, fontWeight: FontWeight.w600),
-                      ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                child: GlassContainer(
+                  radius: 28,
+                  padding: EdgeInsets.zero,
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(
+                      20,
+                      28,
+                      20,
+                      // Add extra bottom padding when keyboard is open
+                      (MediaQuery.of(context).viewInsets.bottom > 0)
+                          ? MediaQuery.of(context).viewInsets.bottom + 20
+                          : 32,
                     ),
-                    const SizedBox(height: 80),
-                    TextField(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Align(
+                          alignment: Alignment.center,
+                          child: Text(
+                            'Hello!',
+                            style: TextStyle(color: Colors.white, fontSize: 24, fontStyle: FontStyle.italic, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        const SizedBox(height: 80),
+                        TextField(
+                      style: const TextStyle(color: Colors.white),
+                      cursorColor: Colors.white,
                       controller: _usernameController,
                       decoration: _roundedInputDecoration(
                         hint: 'Username',
-                        icon: SvgPicture.asset('assets/icon/account.svg', width: 22, height: 22),
+                        icon: SvgPicture.asset('assets/icon/account.svg', width: 22, height: 22, color: Colors.white),
                       ),
                     ),
                     const SizedBox(height: 30),
                     TextField(
+                      style: const TextStyle(color: Colors.white),
+                      cursorColor: Colors.white,
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
                       decoration: _roundedInputDecoration(
                         hint: 'Email',
-                        icon: SvgPicture.asset('assets/icon/email.svg', width: 16, height: 16),
+                        icon: SvgPicture.asset('assets/icon/email.svg', width: 16, height: 16, color: Colors.white),
                       ),
                     ),
                     const SizedBox(height: 30),
                     TextField(
+                      style: const TextStyle(color: Colors.white),
+                      cursorColor: Colors.white,
                       controller: _passwordController,
                       obscureText: true,
                       decoration: _roundedInputDecoration(
                         hint: 'Password',
-                        icon: SvgPicture.asset('assets/icon/password.svg', width: 22, height: 22),
+                        icon: SvgPicture.asset('assets/icon/password.svg', width: 22, height: 22, color: Colors.white),
                       ),
                     ),
                     const SizedBox(height: 15),
@@ -217,7 +245,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           visualDensity: VisualDensity.compact,
                         ),
                         const Expanded(
-                          child: Text('I agree to the terms and conditions', style: TextStyle(fontSize: 12)),
+                          child: Text('I agree to the terms and conditions', style: TextStyle(color: Colors.white, fontSize: 12)),
                         ),
                       ],
                     ),
@@ -246,7 +274,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     const SizedBox(height: 30),
                     const Align(
                       alignment: Alignment.center,
-                      child: Text('Or'),
+                      child: Text('Or', style: TextStyle(color: Colors.white)),
                     ),
                     const SizedBox(height: 20),
                     Row(
@@ -262,17 +290,20 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       alignment: Alignment.center,
                       child: Text(
                         'Login with your Social Media accounts',
-                        style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, fontWeight: FontWeight.w400),
+                        style: TextStyle(color: Colors.white, fontSize: 12, fontStyle: FontStyle.italic, fontWeight: FontWeight.w400),
                       ),
                     ),
                   ],
                 ), // end inner Column
               ), // end SingleChildScrollView
-            ), // end Container
-          ), // end Expanded
-        ], // end Column children
-      ), // end Column
-    ), // end SafeArea
+            ), // end GlassContainer
+          ), // end Padding
+        ), // end Expanded
+            ], // end Column children
+          ), // end Column
+        ), // end SafeArea
+      ], // end Stack children
+    ), // end Stack
   ); // end Scaffold
  }
 }
