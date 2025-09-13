@@ -8,6 +8,8 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../../models/room.dart';
 import '../../services/room_service.dart';
+import '../../models/schedule.dart';
+import '../../services/schedule_service.dart';
 import '../../widgets/glass_container.dart';
 
 class RoomManagementScreen extends StatefulWidget {
@@ -21,8 +23,9 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
   final _formKey = GlobalKey<FormState>();
   final _codeController = TextEditingController();
   final _nameController = TextEditingController();
-  final _buildingController = TextEditingController();
   final _deptController = TextEditingController();
+  final _instructorController = TextEditingController();
+  final _scheduleController = TextEditingController();
   
   Room? _editingRoom;
   bool _isGeneratingQR = false;
@@ -31,8 +34,9 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
   void dispose() {
     _codeController.dispose();
     _nameController.dispose();
-    _buildingController.dispose();
     _deptController.dispose();
+    _instructorController.dispose();
+    _scheduleController.dispose();
     super.dispose();
   }
 
@@ -87,7 +91,6 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
       _editingRoom = room;
       _codeController.text = room.code;
       _nameController.text = room.name;
-      _buildingController.text = room.building;
       _deptController.text = room.deptTag ?? '';
     });
     _showEditDialog();
@@ -167,11 +170,13 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
                       ),
                       const SizedBox(height: 16),
                       TextFormField(
-                        controller: _buildingController,
+                        controller: _instructorController,
                         style: const TextStyle(color: Colors.white),
                         cursorColor: Colors.white,
                         decoration: InputDecoration(
-                          labelText: 'Building',
+                          labelText: 'Instructor (optional)',
+                          hintText: 'e.g., Ms. Kate Estacio',
+                          hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
                           labelStyle: TextStyle(color: Colors.white.withOpacity(0.8)),
                           enabledBorder: const UnderlineInputBorder(
                             borderSide: BorderSide(color: Colors.white54),
@@ -180,12 +185,24 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
                             borderSide: BorderSide(color: Color(0xFF63C1E3)),
                           ),
                         ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter a building name';
-                          }
-                          return null;
-                        },
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _scheduleController,
+                        style: const TextStyle(color: Colors.white),
+                        cursorColor: Colors.white,
+                        decoration: InputDecoration(
+                          labelText: 'Schedule (optional)',
+                          hintText: 'e.g., 7:00am - 9:00am',
+                          hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
+                          labelStyle: TextStyle(color: Colors.white.withOpacity(0.8)),
+                          enabledBorder: const UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.white54),
+                          ),
+                          focusedBorder: const UnderlineInputBorder(
+                            borderSide: BorderSide(color: Color(0xFF63C1E3)),
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 16),
                       TextFormField(
@@ -223,7 +240,6 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
                             qrCode: 'ROOM_${_codeController.text.toUpperCase()}_${const Uuid().v4().substring(0, 6)}',
                             code: _codeController.text.toUpperCase(),
                             name: _nameController.text,
-                            building: _buildingController.text,
                             deptTag: _deptController.text.isEmpty ? null : _deptController.text,
                           );
 
@@ -233,8 +249,33 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
                             await RoomService.instance.create(room);
                           }
 
+                          // If instructor and schedule provided, create a ScheduleEntry for today
+                          final instructor = _instructorController.text.trim();
+                          final sched = _scheduleController.text.trim();
+                          if (instructor.isNotEmpty && sched.isNotEmpty) {
+                            final range = _parseTimeRangeForToday(sched);
+                            if (range != null) {
+                              await ScheduleService.instance.addEntry(
+                                ScheduleEntry(
+                                  id: const Uuid().v4(),
+                                  roomId: room.code,
+                                  start: range.$1,
+                                  end: range.$2,
+                                  title: 'Scheduled Session',
+                                  instructor: instructor,
+                                ),
+                              );
+                            }
+                          }
+
                           if (mounted) {
                             Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(isEditing ? 'Room updated successfully' : 'Room added successfully'),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
                             _clearForm();
                           }
                         }
@@ -260,8 +301,40 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
     _editingRoom = null;
     _codeController.clear();
     _nameController.clear();
-    _buildingController.clear();
     _deptController.clear();
+    _instructorController.clear();
+    _scheduleController.clear();
+  }
+
+  /// Parses a time range string like "7:00am - 9:00am" into today's DateTime start/end.
+  /// Returns null if parsing fails.
+  (DateTime, DateTime)? _parseTimeRangeForToday(String input) {
+    final regex = RegExp(r'^\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*-\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*$', caseSensitive: false);
+    final m = regex.firstMatch(input);
+    if (m == null) return null;
+    int h1 = int.parse(m.group(1)!);
+    int m1 = int.parse(m.group(2) ?? '0');
+    String? p1 = m.group(3)?.toLowerCase();
+    int h2 = int.parse(m.group(4)!);
+    int m2 = int.parse(m.group(5) ?? '0');
+    String? p2 = m.group(6)?.toLowerCase();
+
+    int to24(int h, String? p) {
+      h = h % 12;
+      if (p == 'pm') h += 12;
+      return h;
+    }
+
+    // If either period missing, assume same as the one provided
+    if (p1 == null && p2 != null) p1 = p2;
+    if (p2 == null && p1 != null) p2 = p1;
+    if (p1 == null || p2 == null) return null;
+
+    final now = DateTime.now();
+    final day = DateTime(now.year, now.month, now.day);
+    final start = DateTime(day.year, day.month, day.day, to24(h1, p1), m1);
+    final end = DateTime(day.year, day.month, day.day, to24(h2, p2), m2);
+    return (start, end);
   }
 
   Future<void> _saveQRCode(Room room) async {
@@ -354,7 +427,6 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
                             _editingRoom = null;
                             _codeController.clear();
                             _nameController.clear();
-                            _buildingController.clear();
                             _deptController.clear();
                             _showEditDialog();
                           },
@@ -448,7 +520,7 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${room.building}${room.deptTag != null ? ' • ${room.deptTag}' : ''}',
+                      room.deptTag != null ? '${room.deptTag}' : '',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodyMedium?.copyWith(

@@ -12,7 +12,7 @@ class Room {
   final String qrCode; // value encoded in the QR
   final String code; // e.g., CL2
   final String name; // e.g., Computer Lab 2
-  final String building;
+  final String? building;
   final int? capacity;
   final String? deptTag;
   final String? qrImagePath; // Path to saved QR code image
@@ -66,15 +66,14 @@ class Room {
     required this.qrCode,
     required this.code,
     required this.name,
-    required this.building,
+    this.building,
     this.capacity,
     this.deptTag,
     this.qrImagePath,
   }) : assert(id != null),
        assert(qrCode != null),
        assert(code != null),
-       assert(name != null),
-       assert(building != null);
+       assert(name != null);
   
   Room copyWith({
     String? id,
