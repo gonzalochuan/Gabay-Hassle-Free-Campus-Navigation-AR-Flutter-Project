@@ -10,6 +10,9 @@ class AppUser {
   final UserRole role;
   final String? department;
   final String? yearSection;
+  final String? course; // e.g., BSIT
+  final String? block;  // e.g., Block 4
+  final String? yearId; // e.g., 2022-1230
   final bool active;
 
   const AppUser({
@@ -19,6 +22,9 @@ class AppUser {
     required this.role,
     this.department,
     this.yearSection,
+    this.course,
+    this.block,
+    this.yearId,
     this.active = true,
   });
 
@@ -29,6 +35,9 @@ class AppUser {
     UserRole? role,
     String? department,
     String? yearSection,
+    String? course,
+    String? block,
+    String? yearId,
     bool? active,
   }) => AppUser(
         id: id ?? this.id,
@@ -37,6 +46,9 @@ class AppUser {
         role: role ?? this.role,
         department: department ?? this.department,
         yearSection: yearSection ?? this.yearSection,
+        course: course ?? this.course,
+        block: block ?? this.block,
+        yearId: yearId ?? this.yearId,
         active: active ?? this.active,
       );
 }

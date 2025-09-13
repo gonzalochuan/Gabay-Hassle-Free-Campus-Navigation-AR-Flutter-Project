@@ -5,9 +5,35 @@ import '../models/user.dart';
 class UserService {
   UserService._internal() {
     _users = [
-      AppUser(id: Uuid().v4(), name: 'Admin', email: 'admin@seait.edu', role: UserRole.admin),
-      AppUser(id: Uuid().v4(), name: 'Juan Dela Cruz', email: 'juan@example.com', role: UserRole.user, department: 'IT'),
-      AppUser(id: Uuid().v4(), name: 'Maria Santos', email: 'maria@example.com', role: UserRole.user, department: 'CS'),
+      AppUser(
+        id: const Uuid().v4(),
+        name: 'Admin',
+        email: 'admin@seait.edu',
+        role: UserRole.admin,
+        course: 'Admin',
+        block: 'N/A',
+        yearId: 'N/A',
+      ),
+      AppUser(
+        id: const Uuid().v4(),
+        name: 'Juan Dela Cruz',
+        email: 'juan@example.com',
+        role: UserRole.user,
+        department: 'IT',
+        course: 'BSIT',
+        block: 'Block 4',
+        yearId: '2022-1230',
+      ),
+      AppUser(
+        id: const Uuid().v4(),
+        name: 'Maria Santos',
+        email: 'maria@example.com',
+        role: UserRole.user,
+        department: 'CS',
+        course: 'BSCS',
+        block: 'Block 2',
+        yearId: '2021-0456',
+      ),
     ];
     _emit();
   }

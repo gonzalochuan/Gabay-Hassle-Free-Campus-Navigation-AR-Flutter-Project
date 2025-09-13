@@ -1,6 +1,9 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:Gabay/models/user.dart';
+import 'package:Gabay/services/user_service.dart';
 import '../navigate/navigate_screen.dart';
 import '../room_scanner/room_scanner_screen.dart';
 import '../news/news_feed_screen.dart';
@@ -165,45 +168,174 @@ class _Background extends StatelessWidget {
   }
 }
 
-class _HeaderCard extends StatelessWidget {
+class _HeaderCard extends StatefulWidget {
   const _HeaderCard({required this.userName});
   final String userName;
 
   @override
+  State<_HeaderCard> createState() => _HeaderCardState();
+}
+
+class _HeaderCardState extends State<_HeaderCard> {
+  bool _showDetails = false;
+
+  static AppUser _resolveUser(String name) {
+    try {
+      final list = UserService.instance.current;
+      // 1) Try exact name match
+      final byName = list.where((u) => u.name.toLowerCase() == name.toLowerCase());
+      if (byName.isNotEmpty) return byName.first;
+      // 2) Fallback to first non-admin user with data
+      final withData = list.where((u) => u.role == UserRole.user && ((u.course ?? u.department ?? u.block ?? u.yearId ?? u.yearSection) != null));
+      if (withData.isNotEmpty) return withData.first;
+      // 3) Fallback to first user if any
+      if (list.isNotEmpty) return list.first;
+      // Final fallback
+      return AppUser(id: 'local', name: name, email: '', role: UserRole.user);
+    } catch (_) {
+      return AppUser(id: 'local', name: name, email: '', role: UserRole.user);
+    }
+  }
+
+  static String _buildTooltip(AppUser u) {
+    final course = (u.course ?? u.department ?? '').trim();
+    final block = (u.block ?? '').trim();
+    final year = (u.yearId ?? u.yearSection ?? '').trim();
+    final lines = <String>[
+      'Name: ${u.name}',
+      if (u.email.isNotEmpty) 'Email: ${u.email}',
+      if (course.isNotEmpty) 'Course: $course',
+      if (block.isNotEmpty) 'Block: $block',
+      if (year.isNotEmpty) 'Year: $year',
+      'Role: ${describeEnum(u.role)}',
+      if (!u.active) 'Status: Inactive',
+    ];
+    return lines.join('\n');
+  }
+
+  static Widget _profileChip(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withOpacity(0.16)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white70, size: 16),
+          const SizedBox(width: 6),
+          Text(text, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final AppUser user = _resolveUser(widget.userName);
+    final String tooltipMsg = _buildTooltip(user);
+    final String courseStr = ((user.course ?? user.department) ?? '').trim();
+    final String blockStr = (user.block ?? '').trim();
+    final String yearStr  = ((user.yearId ?? user.yearSection) ?? '').trim();
     return _GlassContainer(
       radius: 28,
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _CircleBadge(assetPath: 'assets/image/homelogo.png', fallbackIcon: Icons.place),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Welcome, $userName',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                  ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _CircleBadge(assetPath: 'assets/image/homelogo.png', fallbackIcon: Icons.place),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Welcome, ${widget.userName}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'There are quick access cards to navigate wherever you go',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 6),
-                const Text(
-                  'There are quick access cards to navigate wherever you go',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 13,
-                  ),
+              ),
+              const SizedBox(width: 12),
+              Tooltip(
+                message: tooltipMsg,
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.90),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white.withOpacity(0.18)),
                 ),
-              ],
-            ),
+                textStyle: const TextStyle(color: Colors.white, fontSize: 12),
+                padding: const EdgeInsets.all(10),
+                waitDuration: const Duration(milliseconds: 200),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(21),
+                  onTap: () => setState(() => _showDetails = !_showDetails),
+                  child: const _CircleBadge(fallbackIcon: Icons.person_outline),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          const _CircleBadge(fallbackIcon: Icons.person_outline),
+          if (_showDetails) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white.withOpacity(0.16)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const _CircleBadge(fallbackIcon: Icons.person_outline),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(user.name, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+                            if (user.email.isNotEmpty)
+                              Text(user.email, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      if (courseStr.isNotEmpty) _profileChip(Icons.school_outlined, 'Course: ' + courseStr),
+                      if (blockStr.isNotEmpty) _profileChip(Icons.group_outlined, 'Block: ' + blockStr),
+                      if (yearStr.isNotEmpty) _profileChip(Icons.calendar_today_outlined, 'Year: ' + yearStr),
+                      _profileChip(Icons.badge_outlined, 'Role: ${describeEnum(user.role)}'),
+                      if (!user.active) _profileChip(Icons.person_off_outlined, 'Inactive'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
