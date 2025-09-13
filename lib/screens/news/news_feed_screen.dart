@@ -2,6 +2,8 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import '../../widgets/glass_container.dart';
+import '../../models/news.dart';
+import '../../services/news_service.dart';
 
 class NewsFeedScreen extends StatefulWidget {
   const NewsFeedScreen({super.key});
@@ -58,34 +60,38 @@ class _NewsFeedScreenState extends State<NewsFeedScreen> {
                   children: const [
                     Text('Latest', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
                     SizedBox(width: 8),
-                    _Badge(label: 'Mock', color: Color(0x33475564)),
+                    _Badge(label: 'Live', color: Color(0x33475564)),
                   ],
                 ),
                 const SizedBox(height: 16),
-                // Feed cards (mock data)
-                const _AnnouncementCard(
-                  title: 'Registrar: Enrollment Extension',
-                  body: 'Enrollment extended until Sep 15 for late enrollees. Please proceed to online portal.',
-                  dept: 'Registrar',
-                  timeAgo: '2h',
-                ),
-                const SizedBox(height: 12),
-                const _EventCard(
-                  title: 'Tech Talk: Intro to Flutter',
-                  date: 'SEP 12',
-                  time: '2:00–3:30 PM',
-                  location: 'MST Hall',
-                ),
-                const SizedBox(height: 12),
-                const _AlertCard(
-                  title: 'Power Interruption (MST Building)',
-                  body: 'Maintenance from 9–11 AM. Some labs may be closed. Please plan accordingly.',
-                  timeAgo: 'Just now',
-                ),
-                const SizedBox(height: 12),
-                const _LostFoundCard(
-                  title: 'Found: Black Umbrella at CL 2',
-                  meta: 'Claim at Security Desk',
+                // Live feed
+                StreamBuilder<List<NewsPost>>(
+                  stream: NewsService.instance.feed(),
+                  builder: (context, snapshot) {
+                    final posts = snapshot.data ?? const <NewsPost>[];
+                    if (posts.isEmpty) {
+                      return Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.06),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: Colors.white.withOpacity(0.12)),
+                        ),
+                        child: const Text(
+                          'No announcements yet. Check back later.',
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                      );
+                    }
+                    return Column(
+                      children: [
+                        for (final p in posts) ...[
+                          _buildPostCard(p),
+                          const SizedBox(height: 12),
+                        ]
+                      ],
+                    );
+                  },
                 ),
               ],
             ),
@@ -94,6 +100,44 @@ class _NewsFeedScreenState extends State<NewsFeedScreen> {
       ),
     );
   }
+}
+
+Widget _buildPostCard(NewsPost p) {
+  switch (p.type) {
+    case PostType.announcement:
+      return _AnnouncementCard(
+        title: p.title,
+        body: p.body ?? '',
+        dept: p.deptTag ?? 'Campus',
+        timeAgo: _timeAgo(p.createdAt),
+      );
+    case PostType.event:
+      return _EventCard(
+        title: p.title,
+        date: 'SEP 12',
+        time: '2:00–3:30 PM',
+        location: 'Campus',
+      );
+    case PostType.alert:
+      return _AlertCard(
+        title: p.title,
+        body: p.body ?? '',
+        timeAgo: _timeAgo(p.createdAt),
+      );
+    case PostType.lostFound:
+      return _LostFoundCard(
+        title: p.title,
+        meta: p.body ?? 'See details',
+      );
+  }
+}
+
+String _timeAgo(DateTime dt) {
+  final diff = DateTime.now().difference(dt);
+  if (diff.inMinutes < 1) return 'Just now';
+  if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+  if (diff.inHours < 24) return '${diff.inHours}h';
+  return '${diff.inDays}d';
 }
 
 class _SegmentedTabs extends StatelessWidget {

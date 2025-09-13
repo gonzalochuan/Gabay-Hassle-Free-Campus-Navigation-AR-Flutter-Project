@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'screens/home/home_dashboard.dart';
 import 'widgets/glass_container.dart';
+import 'screens/admin/admin_dashboard.dart';
 
 void main() {
   runApp(const MyApp());
@@ -255,11 +256,22 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       child: ElevatedButton(
                         onPressed: agree
                             ? () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => const HomeDashboard(),
-                                  ),
-                                );
+                                final name = _usernameController.text.trim();
+                                final email = _emailController.text.trim();
+                                final bool isAdmin = (email.toLowerCase() == 'admin@seait.edu') || (name.toLowerCase() == 'admin');
+                                if (isAdmin) {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => const AdminDashboard(),
+                                    ),
+                                  );
+                                } else {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => HomeDashboard(userName: name.isNotEmpty ? name : 'Guest'),
+                                    ),
+                                  );
+                                }
                               }
                             : null,
                         style: ElevatedButton.styleFrom(
