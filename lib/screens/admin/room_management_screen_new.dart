@@ -61,7 +61,6 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
                   _startEditing(room);
                 },
               ),
-              const Divider(color: Colors.white24, height: 1),
               ListTile(
                 leading: const Icon(Icons.qr_code, color: Colors.white70),
                 title: const Text('Show QR Code', style: TextStyle(color: Colors.white)),
@@ -70,7 +69,6 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
                   _showQRCodeDialog(room);
                 },
               ),
-              const Divider(color: Colors.white24, height: 1),
               ListTile(
                 leading: const Icon(Icons.delete, color: Colors.redAccent),
                 title: const Text('Delete Room', style: TextStyle(color: Colors.white)),
@@ -387,20 +385,9 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
     final theme = Theme.of(context);
     
     return Scaffold(
-      backgroundColor: const Color(0xFF1E2931),
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          // Background
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFF63C1E3), Color(0xFF1E2931)],
-              ),
-            ),
-          ),
-          
           // Content
           SafeArea(
             child: Column(

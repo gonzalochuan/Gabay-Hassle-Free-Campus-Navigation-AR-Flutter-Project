@@ -10,6 +10,7 @@ import '../../services/user_service.dart';
 import '../../models/user.dart';
 import '../../services/room_service.dart';
 import '../../services/schedule_service.dart';
+import 'user_management_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -104,23 +105,23 @@ class _AdminDashboardState extends State<AdminDashboard> {
             indicatorColor: const Color(0xFF63C1E3),
           ),
         ),
-        body: TabBarView(
+        body: Stack(
+          fit: StackFit.expand,
           children: [
-            // Dashboard Tab
-            Stack(
-              fit: StackFit.expand,
+            const _Background(),
+            TabBarView(
               children: [
-                const _Background(),
+                // Dashboard Tab
                 SafeArea(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(16.0),
                     child: _buildAdminContent(),
                   ),
                 ),
+                // Room Management Tab
+                const RoomManagementScreen(),
               ],
             ),
-            // Room Management Tab
-            RoomManagementScreen(),
           ],
         ),
       ),
@@ -156,7 +157,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 icon: Icons.people,
                 label: 'User Management',
                 onTap: () {
-                  // Navigate to user management
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const UserManagementScreen(),
+                    ),
+                  );
                 },
               ),
               const Divider(color: Colors.white24, height: 32),
@@ -179,23 +184,14 @@ class _Background extends StatelessWidget {
   const _Background();
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0xFF63C1E3), Color(0xFF1E2931)],
-            ),
-          ),
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF63C1E3), Color(0xFF1E2931)],
         ),
-        BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 2, sigmaY: 2),
-          child: Container(color: Colors.black.withOpacity(0)),
-        ),
-      ],
+      ),
     );
   }
 }

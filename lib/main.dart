@@ -121,7 +121,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               controller: _nameController,
                               onChanged: (_) => setState(() {}),
                               decoration: _roundedInputDecoration(
-                                hint: 'Username',
+                                hint: 'Full name',
                                 icon: SvgPicture.asset('assets/icon/account.svg', width: 22, height: 22, color: Colors.white),
                               ),
                             ),
@@ -317,17 +317,24 @@ class SignUpScreen extends StatefulWidget {
 }
 
 class _SignUpScreenState extends State<SignUpScreen> {
-  bool agree = false;
-  final _usernameController = TextEditingController();
+  bool rememberMe = true;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
 
   @override
   void dispose() {
-    _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  bool get _canLogin {
+    final email = _emailController.text.trim();
+    final pass = _passwordController.text.trim();
+    final cpass = _confirmPasswordController.text.trim();
+    return email.isNotEmpty && pass.isNotEmpty && cpass.isNotEmpty && pass == cpass;
   }
 
   InputDecoration _roundedInputDecoration({required String hint, required Widget icon}) {
@@ -374,158 +381,174 @@ class _SignUpScreenState extends State<SignUpScreen> {
             top: true,
             bottom: false,
             child: Column(
-          children: [
-            const SizedBox(height: 70),
-            // Top header with logo and description
-            Image.asset('assets/image/LogoWhite.png', width: 64, height: 64, semanticLabel: 'GABAY Logo'),
-            const SizedBox(height: 20),
-            const Text(
-              'GABAY: Smart Campus Navigation System',
-              style: TextStyle(color: Colors.white, fontSize: 13),
-            ),
-            const SizedBox(height: 50),
-            // Glassmorphic container sticks to bottom and fills remaining space
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                child: GlassContainer(
-                  radius: 28,
-                  padding: EdgeInsets.zero,
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.fromLTRB(
-                      20,
-                      28,
-                      20,
-                      // Add extra bottom padding when keyboard is open
-                      (MediaQuery.of(context).viewInsets.bottom > 0)
-                          ? MediaQuery.of(context).viewInsets.bottom
-                          : 0,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const Align(
-                          alignment: Alignment.center,
-                          child: Text(
-                            'Hello!',
-                            style: TextStyle(color: Colors.white, fontSize: 24, fontStyle: FontStyle.italic, fontWeight: FontWeight.w600),
-                          ),
+              children: [
+                const SizedBox(height: 70),
+                Image.asset('assets/image/LogoWhite.png', width: 64, height: 64, semanticLabel: 'GABAY Logo'),
+                const SizedBox(height: 20),
+                const Text(
+                  'GABAY: Smart Campus Navigation System',
+                  style: TextStyle(color: Colors.white, fontSize: 13),
+                ),
+                const SizedBox(height: 50),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                    child: GlassContainer(
+                      radius: 28,
+                      padding: EdgeInsets.zero,
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.fromLTRB(
+                          20,
+                          28,
+                          20,
+                          (MediaQuery.of(context).viewInsets.bottom > 0)
+                              ? MediaQuery.of(context).viewInsets.bottom
+                              : 0,
                         ),
-                        const SizedBox(height: 60),
-                        TextField(
-                      style: const TextStyle(color: Colors.white),
-                      cursorColor: Colors.white,
-                      controller: _usernameController,
-                      decoration: _roundedInputDecoration(
-                        hint: 'Username',
-                        icon: SvgPicture.asset('assets/icon/account.svg', width: 22, height: 22, color: Colors.white),
-                      ),
-                    ),
-                    const SizedBox(height: 30),
-                    TextField(
-                      style: const TextStyle(color: Colors.white),
-                      cursorColor: Colors.white,
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: _roundedInputDecoration(
-                        hint: 'Email',
-                        icon: SvgPicture.asset('assets/icon/email.svg', width: 16, height: 16, color: Colors.white),
-                      ),
-                    ),
-                    const SizedBox(height: 30),
-                    TextField(
-                      style: const TextStyle(color: Colors.white),
-                      cursorColor: Colors.white,
-                      controller: _passwordController,
-                      obscureText: true,
-                      decoration: _roundedInputDecoration(
-                        hint: 'Password',
-                        icon: SvgPicture.asset('assets/icon/password.svg', width: 22, height: 22, color: Colors.white),
-                      ),
-                    ),
-                    const SizedBox(height: 15),
-                    Row(
-                      children: [
-                        Checkbox(
-                          value: agree,
-                          onChanged: (v) => setState(() => agree = v ?? false),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                        const Expanded(
-                          child: Text('I agree to the terms and conditions', style: TextStyle(color: Colors.white, fontSize: 12)),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 30),
-                    SizedBox(
-                      height: 56,
-                      child: ElevatedButton(
-                        onPressed: agree
-                            ? () {
-                                final name = _usernameController.text.trim();
-                                final email = _emailController.text.trim();
-                                final bool isAdmin = (email.toLowerCase() == 'admin@seait.edu') || (name.toLowerCase() == 'admin');
-                                if (isAdmin) {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => const AdminDashboard(),
-                                    ),
-                                  );
-                                } else {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => HomeDashboard(userName: name.isNotEmpty ? name : 'Guest'),
-                                    ),
-                                  );
-                                }
-                              }
-                            : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF63C1E3),
-                          foregroundColor: Colors.white,
-                          shape: const StadiumBorder(),
-                          textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                        ),
-                        child: const Text('Login'),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text('No account?', style: TextStyle(color: Colors.white70)),
-                        TextButton(
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const RegisterScreen(),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const Align(
+                              alignment: Alignment.center,
+                              child: Text(
+                                'Login!',
+                                style: TextStyle(color: Colors.white, fontSize: 24, fontStyle: FontStyle.italic, fontWeight: FontWeight.w600),
                               ),
-                            );
-                          },
-                          child: const Text('Register'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 25),
-                    const Align(
-                      alignment: Alignment.center,
-                      child: Text(
-                        'Powered by Gabay 2025',
-                        style: TextStyle(color: Colors.white70, fontSize: 12),
-                      ),
-                    ),
-                  ],
-                ), // end inner Column
-              ), // end SingleChildScrollView
-            ), // end GlassContainer
-          ), // end Padding
-        ), // end Expanded
-            ], // end Column children
-          ), // end Column
-        ), // end SafeArea
-      ], // end Stack children
-    ), // end Stack
-  ); // end Scaffold
- }
+                            ),
+                            const SizedBox(height: 60),
+                            TextField(
+                              style: const TextStyle(color: Colors.white),
+                              cursorColor: Colors.white,
+                              controller: _emailController,
+                              keyboardType: TextInputType.emailAddress,
+                              onChanged: (_) => setState(() {}),
+                              decoration: _roundedInputDecoration(
+                                hint: 'Email',
+                                icon: SvgPicture.asset('assets/icon/email.svg', width: 16, height: 16, color: Colors.white),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            TextField(
+                              style: const TextStyle(color: Colors.white),
+                              cursorColor: Colors.white,
+                              controller: _passwordController,
+                              obscureText: true,
+                              onChanged: (_) => setState(() {}),
+                              decoration: _roundedInputDecoration(
+                                hint: 'Password',
+                                icon: SvgPicture.asset('assets/icon/password.svg', width: 22, height: 22, color: Colors.white),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            TextField(
+                              style: const TextStyle(color: Colors.white),
+                              cursorColor: Colors.white,
+                              controller: _confirmPasswordController,
+                              obscureText: true,
+                              onChanged: (_) => setState(() {}),
+                              decoration: _roundedInputDecoration(
+                                hint: 'Confirm Password',
+                                icon: SvgPicture.asset('assets/icon/password.svg', width: 22, height: 22, color: Colors.white),
+                              ).copyWith(
+                                errorText: (_confirmPasswordController.text.isNotEmpty &&
+                                        _passwordController.text.trim() != _confirmPasswordController.text.trim())
+                                    ? 'Passwords do not match'
+                                    : null,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Checkbox(
+                                  value: rememberMe,
+                                  onChanged: (v) => setState(() => rememberMe = v ?? false),
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                const Text('Remember me', style: TextStyle(color: Colors.white)),
+                                const Spacer(),
+                                TextButton(
+                                  onPressed: () {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Forgot password tapped')),
+                                    );
+                                  },
+                                  style: TextButton.styleFrom(foregroundColor: Colors.blue),
+                                  child: const Text('Forgot password?'),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              height: 56,
+                              child: ElevatedButton(
+                                onPressed: _canLogin
+                                    ? () {
+                                        final email = _emailController.text.trim();
+                                        final String name = (email.contains('@') && email.split('@').first.isNotEmpty)
+                                            ? email.split('@').first
+                                            : 'Guest';
+                                        final bool isAdmin = (email.toLowerCase() == 'admin@seait.edu');
+                                        if (isAdmin) {
+                                          Navigator.of(context).push(
+                                            MaterialPageRoute(
+                                              builder: (_) => const AdminDashboard(),
+                                            ),
+                                          );
+                                        } else {
+                                          Navigator.of(context).push(
+                                            MaterialPageRoute(
+                                              builder: (_) => HomeDashboard(userName: name),
+                                            ),
+                                          );
+                                        }
+                                      }
+                                    : null,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF63C1E3),
+                                  foregroundColor: Colors.white,
+                                  shape: const StadiumBorder(),
+                                  textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                                ),
+                                child: const Text('Login'),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Text('No account?', style: TextStyle(color: Colors.white70)),
+                                TextButton(
+                                  onPressed: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => const RegisterScreen(),
+                                      ),
+                                    );
+                                  },
+                                  style: TextButton.styleFrom(foregroundColor: Colors.blue),
+                                  child: const Text('Register'),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 40),
+                            const Align(
+                              alignment: Alignment.center,
+                              child: Text(
+                                'Powered by Gabay 2025',
+                                style: TextStyle(color: Colors.white70, fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ), // end inner Column
+                      ), // end SingleChildScrollView
+                    ), // end GlassContainer
+                  ), // end Padding
+                ), // end Expanded
+              ], // end Column children
+            ), // end Column
+          ), // end SafeArea
+        ], // end Stack children
+      ), // end Stack
+    ); // end Scaffold
+  }
 }
-

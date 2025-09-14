@@ -14,8 +14,11 @@ class AppUser {
   final String? block;  // e.g., Block 4
   final String? yearId; // e.g., 2022-1230
   final bool active;
+  final DateTime createdAt;
+  final DateTime? lastSignInAt;
+  final String? createdBy; // email or name of creator
 
-  const AppUser({
+  AppUser({
     required this.id,
     required this.name,
     required this.email,
@@ -26,7 +29,10 @@ class AppUser {
     this.block,
     this.yearId,
     this.active = true,
-  });
+    DateTime? createdAt,
+    this.lastSignInAt,
+    this.createdBy,
+  }) : createdAt = createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
 
   AppUser copyWith({
     String? id,
@@ -39,6 +45,9 @@ class AppUser {
     String? block,
     String? yearId,
     bool? active,
+    DateTime? createdAt,
+    DateTime? lastSignInAt,
+    String? createdBy,
   }) => AppUser(
         id: id ?? this.id,
         name: name ?? this.name,
@@ -50,5 +59,8 @@ class AppUser {
         block: block ?? this.block,
         yearId: yearId ?? this.yearId,
         active: active ?? this.active,
+        createdAt: createdAt ?? this.createdAt,
+        lastSignInAt: lastSignInAt ?? this.lastSignInAt,
+        createdBy: createdBy ?? this.createdBy,
       );
 }

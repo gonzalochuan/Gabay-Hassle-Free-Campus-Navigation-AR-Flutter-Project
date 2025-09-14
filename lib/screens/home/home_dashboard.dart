@@ -198,17 +198,13 @@ class _HeaderCardState extends State<_HeaderCard> {
   }
 
   static String _buildTooltip(AppUser u) {
+    final isAdmin = u.role == UserRole.admin || u.email.toLowerCase() == 'admin@seait.edu';
     final course = (u.course ?? u.department ?? '').trim();
-    final block = (u.block ?? '').trim();
-    final year = (u.yearId ?? u.yearSection ?? '').trim();
     final lines = <String>[
-      'Name: ${u.name}',
-      if (u.email.isNotEmpty) 'Email: ${u.email}',
-      if (course.isNotEmpty) 'Course: $course',
-      if (block.isNotEmpty) 'Block: $block',
-      if (year.isNotEmpty) 'Year: $year',
       'Role: ${describeEnum(u.role)}',
-      if (!u.active) 'Status: Inactive',
+      'Username: ${u.name}',
+      if (!isAdmin && course.isNotEmpty) 'Course: $course',
+      if (u.email.isNotEmpty) 'Email: ${u.email}',
     ];
     return lines.join('\n');
   }
@@ -232,13 +228,35 @@ class _HeaderCardState extends State<_HeaderCard> {
     );
   }
 
+  static Widget _actionChip({required IconData icon, required String text, required VoidCallback onTap}) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.10),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white.withOpacity(0.16)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white70, size: 16),
+            const SizedBox(width: 6),
+            Text(text, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppUser user = _resolveUser(widget.userName);
     final String tooltipMsg = _buildTooltip(user);
-    final String courseStr = ((user.course ?? user.department) ?? '').trim();
-    final String blockStr = (user.block ?? '').trim();
-    final String yearStr  = ((user.yearId ?? user.yearSection) ?? '').trim();
+    final bool isAdmin = user.role == UserRole.admin || user.email.toLowerCase() == 'admin@seait.edu';
+    final String courseStr = isAdmin ? '' : ((user.course ?? user.department) ?? '').trim();
     return _GlassContainer(
       radius: 28,
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
@@ -326,9 +344,15 @@ class _HeaderCardState extends State<_HeaderCard> {
                     runSpacing: 8,
                     children: [
                       if (courseStr.isNotEmpty) _profileChip(Icons.school_outlined, 'Course: ' + courseStr),
-                      if (blockStr.isNotEmpty) _profileChip(Icons.group_outlined, 'Block: ' + blockStr),
-                      if (yearStr.isNotEmpty) _profileChip(Icons.calendar_today_outlined, 'Year: ' + yearStr),
                       _profileChip(Icons.badge_outlined, 'Role: ${describeEnum(user.role)}'),
+                      _actionChip(
+                        icon: Icons.logout,
+                        text: 'Logout',
+                        onTap: () {
+                          // Pop all routes and return to the app's root (e.g., welcome/login screen)
+                          Navigator.of(context).popUntil((route) => route.isFirst);
+                        },
+                      ),
                       if (!user.active) _profileChip(Icons.person_off_outlined, 'Inactive'),
                     ],
                   ),
