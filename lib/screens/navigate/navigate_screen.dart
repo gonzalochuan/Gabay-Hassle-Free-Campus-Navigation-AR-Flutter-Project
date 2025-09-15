@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../widgets/glass_container.dart';
 
 class NavigateScreen extends StatefulWidget {
@@ -10,213 +11,176 @@ class NavigateScreen extends StatefulWidget {
   State<NavigateScreen> createState() => _NavigateScreenState();
 }
 
-class _NavigateScreenState extends State<NavigateScreen> {
-  String _mode = '2D'; // '2D' | 'AR'
+class _CategoryChip extends StatelessWidget {
+  const _CategoryChip({required this.label, required this.selected, required this.onTap});
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
-    final h = media.size.height;
-    final mapHeight = h * 0.42;
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        foregroundColor: Colors.white,
+    final bg = selected ? const Color(0xFF63C1E3).withOpacity(0.9) : Colors.white.withOpacity(0.08);
+    final fg = selected ? Colors.white : Colors.white.withOpacity(0.85);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Text(label, style: TextStyle(color: fg, fontWeight: FontWeight.w600)),
       ),
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          _Background(),
-          SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+    );
+  }
+}
+
+class _NavigateScreenState extends State<NavigateScreen> {
+  // Using AR-only mock UI for now (frontend-first)
+  String? _selectedDestination;
+
+  // Mock data categories and rooms
+  final Map<String, List<String>> _mockCategories = {
+    'CL Rooms': List.generate(10, (i) => 'CL ${i + 1}'),
+    'Admin Offices': List.generate(5, (i) => 'Admin Office ${i + 1}'),
+  };
+
+  String _activeCategory = 'CL Rooms';
+
+  // Camera controller for real preview
+  final MobileScannerController _cameraController = MobileScannerController(
+    detectionSpeed: DetectionSpeed.noDuplicates,
+    torchEnabled: false,
+    facing: CameraFacing.back,
+  );
+
+  @override
+  void dispose() {
+    _cameraController.dispose();
+    super.dispose();
+  }
+
+  void _openDestinationPicker() async {
+    final categories = _mockCategories.keys.toList();
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        String tempCategory = _activeCategory;
+        return DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          minChildSize: 0.4,
+          maxChildSize: 0.9,
+          builder: (context, scrollController) {
+            return GlassContainer(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Search Bar
-                  GlassContainer(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.search, color: Colors.white70),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Search Rooms, Building, Offices',
-                            style: TextStyle(color: Colors.white.withOpacity(0.8)),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: const [
+                      Text('Select Destination', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+                      Icon(Icons.place, color: Colors.white70),
+                    ],
                   ),
                   const SizedBox(height: 12),
-                  // 2D / AR Segmented Toggle
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: _SegmentedToggle(
-                      value: _mode,
-                      onChanged: (v) {
-                        if (v == 'AR') {
-                          // For now keep AR disabled. In future, show permission sheet.
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('AR prototype coming later. Using 2D for now.')),
-                          );
-                          return;
+                  // We need local state to update the list when a chip is tapped
+                  Expanded(
+                    child: StatefulBuilder(
+                      builder: (context, setSheetState) {
+                        void setCategory(String c) {
+                          setSheetState(() => tempCategory = c);
                         }
-                        setState(() => _mode = v);
-                      },
-                      arEnabled: false,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  // Recent Destinations
-                  const Text('Recent Destinations', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: const [
-                      _ChipPill(label: 'MST 220'),
-                      _ChipPill(label: 'MST 220'),
-                      _ChipPill(label: 'CL 2'),
-                      _ChipPill(label: 'CCL 3'),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  const Text('Suggestion', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: const [
-                      _ChipPill(label: 'MST 220'),
-                      _ChipPill(label: 'CL 9'),
-                      _ChipPill(label: 'MST 210'),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  // Map placeholder with route (mock only)
-                  GlassContainer(
-                    padding: const EdgeInsets.all(0),
-                    child: SizedBox(
-                      height: mapHeight,
-                      child: Stack(
-                        children: [
-                          Positioned.fill(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Colors.white.withOpacity(0.06),
-                                    Colors.black.withOpacity(0.06),
-                                  ],
-                                ),
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: [
+                                  for (final c in categories)
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: 8.0),
+                                      child: _CategoryChip(
+                                        label: c,
+                                        selected: c == tempCategory,
+                                        onTap: () => setCategory(c),
+                                      ),
+                                    ),
+                                ],
                               ),
-                              alignment: Alignment.center,
-                              child: const Text('MAP Google HERE 2D', style: TextStyle(color: Colors.white54)),
                             ),
-                          ),
-                          Positioned.fill(
-                            child: CustomPaint(
-                              painter: _RoutePainter(),
+                            const SizedBox(height: 8),
+                            Expanded(
+                              child: ListView.builder(
+                                controller: scrollController,
+                                itemCount: _mockCategories[tempCategory]?.length ?? 0,
+                                itemBuilder: (context, index) {
+                                  final room = _mockCategories[tempCategory]![index];
+                                  return ListTile(
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                                    leading: const Icon(Icons.room, color: Colors.white70),
+                                    title: Text(room, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                                    subtitle: Text('Tap to navigate', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12)),
+                                    onTap: () => Navigator.of(context).pop(room),
+                                  );
+                                },
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  // Bottom Info Sheet (static)
-                  GlassContainer(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('To Room MST 20', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
-                        const SizedBox(height: 6),
-                        const Text('12 mins · 20m · Destinations distance', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: const [
-                            Icon(Icons.turn_left, color: Colors.white),
-                            SizedBox(width: 10),
-                            Text('Turn Left  40 mins', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
                           ],
-                        ),
-                      ],
+                        );
+                      },
                     ),
                   ),
                 ],
               ),
+            );
+          },
+        );
+      },
+    );
+
+    if (selected != null && selected.isNotEmpty) {
+      setState(() {
+        _selectedDestination = selected;
+        _activeCategory = _mockCategories.entries.firstWhere((e) => e.value.contains(selected)).key;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        title: const Text('Navigation'),
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Real camera preview
+          Positioned.fill(
+            child: MobileScanner(
+              controller: _cameraController,
+              // No onDetect needed; we only need preview for AR UI
+            ),
+          ),
+          // AR overlay UI on top of the camera
+          Positioned.fill(
+            child: _ArMockOverlay(
+              selectedDestination: _selectedDestination,
+              categories: _mockCategories,
+              activeCategory: _activeCategory,
+              onCategoryChange: (c) => setState(() => _activeCategory = c),
+              onSelectRoom: (room) => setState(() => _selectedDestination = room),
+              onOpenPicker: _openDestinationPicker,
+              onClearDestination: () => setState(() => _selectedDestination = null),
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _SegmentedToggle extends StatelessWidget {
-  const _SegmentedToggle({required this.value, required this.onChanged, this.arEnabled = false});
-  final String value;
-  final ValueChanged<String> onChanged;
-  final bool arEnabled;
-
-  @override
-  Widget build(BuildContext context) {
-    return GlassContainer(
-      padding: const EdgeInsets.all(4),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _Segment(
-            label: '2D',
-            selected: value == '2D',
-            onTap: () => onChanged('2D'),
-          ),
-          const SizedBox(width: 4),
-          _Segment(
-            label: 'AR',
-            selected: value == 'AR',
-            onTap: arEnabled ? () => onChanged('AR') : null,
-            disabled: !arEnabled,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Segment extends StatelessWidget {
-  const _Segment({required this.label, required this.selected, this.onTap, this.disabled = false});
-  final String label;
-  final bool selected;
-  final VoidCallback? onTap;
-  final bool disabled;
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = selected
-        ? const Color(0xFF63C1E3).withOpacity(0.9)
-        : Colors.white.withOpacity(disabled ? 0.06 : 0.08);
-    final fg = selected
-        ? Colors.white
-        : Colors.white.withOpacity(disabled ? 0.4 : 0.8);
-    return InkWell(
-      borderRadius: BorderRadius.circular(24),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Text(label, style: TextStyle(color: fg, fontWeight: FontWeight.w600)),
       ),
     );
   }
@@ -262,37 +226,147 @@ class _Background extends StatelessWidget {
   }
 }
 
-class _RoutePainter extends CustomPainter {
+class _ArMockOverlay extends StatelessWidget {
+  const _ArMockOverlay({
+    this.selectedDestination,
+    required this.categories,
+    required this.activeCategory,
+    required this.onCategoryChange,
+    required this.onSelectRoom,
+    required this.onOpenPicker,
+    required this.onClearDestination,
+  });
+
+  final String? selectedDestination;
+  final Map<String, List<String>> categories;
+  final String activeCategory;
+  final ValueChanged<String> onCategoryChange;
+  final ValueChanged<String> onSelectRoom;
+  final VoidCallback onOpenPicker;
+  final VoidCallback onClearDestination;
+
   @override
-  void paint(Canvas canvas, Size size) {
-    final route = Path();
-    // Simple polyline path from bottom-left to top-right with a couple of turns
-    route.moveTo(size.width * 0.1, size.height * 0.75);
-    route.lineTo(size.width * 0.35, size.height * 0.75);
-    route.lineTo(size.width * 0.45, size.height * 0.55);
-    route.lineTo(size.width * 0.75, size.height * 0.35);
-    route.lineTo(size.width * 0.9, size.height * 0.25);
-
-    final paintRoute = Paint()
-      ..color = const Color(0xFF63C1E3).withOpacity(0.9)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    canvas.drawPath(route, paintRoute);
-
-    // Start dot (You)
-    final start = Offset(size.width * 0.1, size.height * 0.75);
-    final startPaint = Paint()..color = Colors.white;
-    canvas.drawCircle(start, 8, Paint()..color = const Color(0xFF2B7BE4));
-    canvas.drawCircle(start, 4, startPaint);
-
-    // Destination pin (simple)
-    final end = Offset(size.width * 0.9, size.height * 0.25);
-    final pinPaint = Paint()..color = Colors.black.withOpacity(0.85);
-    canvas.drawCircle(end, 6, pinPaint);
+  Widget build(BuildContext context) {
+    final rooms = categories[activeCategory] ?? const <String>[];
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // Transparent layer over the real camera
+        // Direction arrow
+        Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.keyboard_arrow_up_rounded, size: 80, color: Color(0xFF63C1E3)),
+              const SizedBox(height: 6),
+              Text(
+                selectedDestination == null ? 'Pick a destination' : 'Head straight for 20m',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+        ),
+        // In-camera top controls: category chips and rooms row
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Row with Browse and Clear
+                  Row(
+                    children: [
+                      GlassContainer(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        child: InkWell(
+                          onTap: onOpenPicker,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.list, color: Colors.white, size: 16),
+                              SizedBox(width: 6),
+                              Text('Browse', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      if (selectedDestination != null)
+                        GlassContainer(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          child: InkWell(
+                            onTap: onClearDestination,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                Icon(Icons.clear, color: Colors.white, size: 16),
+                                SizedBox(width: 6),
+                                Text('Clear', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  // Category chips
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (final c in categories.keys)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8.0),
+                            child: _CategoryChip(
+                              label: c,
+                              selected: c == activeCategory,
+                              onTap: () => onCategoryChange(c),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // Rooms quick select for active category
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (final r in rooms)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8.0),
+                            child: GlassContainer(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              child: InkWell(
+                                onTap: () => onSelectRoom(r),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      selectedDestination == r ? Icons.check_circle : Icons.navigation,
+                                      size: 14,
+                                      color: Colors.white,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(r, style: const TextStyle(color: Colors.white)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

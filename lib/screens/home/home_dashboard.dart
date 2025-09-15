@@ -42,7 +42,7 @@ class HomeDashboard extends StatelessWidget {
                         child: _FeatureCard(
                           title: 'Navigation',
                           description:
-                              'Navigate campus with 2D maps or AR arrows.',
+                              'Navigate campus with AR msaps arrow guided.',
                           assetPath: '',
                           fallbackIcon: Icons.near_me,
                           onTap: () {

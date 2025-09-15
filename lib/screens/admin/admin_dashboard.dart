@@ -11,6 +11,7 @@ import '../../models/user.dart';
 import '../../services/room_service.dart';
 import '../../services/schedule_service.dart';
 import 'user_management_screen.dart';
+import '../room_scanner/room_scanner_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -169,7 +170,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 icon: Icons.qr_code,
                 label: 'Scan Room QR',
                 onTap: () {
-                  // Navigate to QR scanner
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => RoomScannerScreen(),
+                    ),
+                  );
                 },
               ),
             ],

@@ -236,14 +236,16 @@ class _UserRow extends StatelessWidget {
                   children: [
                     TextButton.icon(
                       onPressed: () => _showEditDialog(context, user),
-                      icon: const Icon(Icons.edit, size: 18),
-                      label: const Text('Edit'),
+                      style: TextButton.styleFrom(foregroundColor: Colors.white),
+                      icon: const Icon(Icons.edit, size: 18, color: Colors.white),
+                      label: const Text('Edit', style: TextStyle(color: Colors.white)),
                     ),
                     const SizedBox(width: 6),
                     TextButton.icon(
                       onPressed: () => _showPasswordDialog(context, user),
-                      icon: const Icon(Icons.lock_reset, size: 18),
-                      label: const Text('Password'),
+                      style: TextButton.styleFrom(foregroundColor: Colors.white),
+                      icon: const Icon(Icons.lock_reset, size: 18, color: Colors.white),
+                      label: const Text('Password', style: TextStyle(color: Colors.white)),
                     ),
                     const Spacer(),
                     IconButton(
