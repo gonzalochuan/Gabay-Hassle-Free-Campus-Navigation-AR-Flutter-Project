@@ -196,7 +196,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       ),
                                     );
                                   },
-                                  child: const Text('Login'),
+                                  child: const Text('Login', style: TextStyle(color: Colors.blue)),
                                 ),
                               ],
                             ),
@@ -516,7 +516,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Text('No account?', style: TextStyle(color: Colors.white70)),
+                                const Text('Don\'t have an account?', style: TextStyle(color: Colors.white70)),
                                 TextButton(
                                   onPressed: () {
                                     Navigator.of(context).push(

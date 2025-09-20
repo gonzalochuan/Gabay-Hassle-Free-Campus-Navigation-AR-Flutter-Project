@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../widgets/glass_container.dart';
 
 class EmergencyScreen extends StatefulWidget {
@@ -14,6 +15,16 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
   static const Color _appAccent = Color(0xFF63C1E3);
   String _incident = 'Idle'; // Idle | Fire | Earthquake | Other
   bool _guiding = false;
+
+  // Camera controller for AR-only preview
+  final MobileScannerController _cameraController = MobileScannerController(
+    detectionSpeed: DetectionSpeed.noDuplicates,
+    torchEnabled: false,
+    facing: CameraFacing.back,
+  );
+
+  // Currently selected exit to guide to (by name)
+  String? _targetExitName;
 
   // Mock data
   final List<_ExitItem> _exits = const [
@@ -63,6 +74,12 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
   }
 
   @override
+  void dispose() {
+    _cameraController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -81,314 +98,396 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          const _Background(),
-          SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              children: [
-                // Alert banner
-                GlassContainer(
-                  padding: const EdgeInsets.all(14),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.14),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white.withOpacity(0.3)),
-                        ),
-                        alignment: Alignment.center,
-                        child: Icon(
-                          _incident == 'Fire'
-                              ? Icons.local_fire_department
-                              : _incident == 'Earthquake'
-                                  ? Icons.vibration
-                                  : Icons.emergency_share,
-                          color: _appAccent,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Text(
-                                  _incident == 'Idle' ? 'No active incident' : '$_incident Alert',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 16,
-                                  ),
+          // AR-only: live camera preview
+          Positioned.fill(
+            child: MobileScanner(
+              controller: _cameraController,
+            ),
+          ),
+          // AR overlay
+          Positioned.fill(
+            child: _EmergencyArOverlay(
+              incident: _incident,
+              exits: _exits,
+              steps: _steps,
+              tips: _tips,
+              accent: _appAccent,
+              onIncidentChange: (i) => setState(() => _incident = i),
+              selectedExitName: _targetExitName,
+              onSelectExit: (name) => setState(() => _targetExitName = name),
+              onClearTarget: () => setState(() => _targetExitName = null),
+              onShowTips: () => showModalBottomSheet(
+                context: context,
+                backgroundColor: Colors.transparent,
+                isScrollControlled: true,
+                builder: (_) {
+                  final items = _tips.take(3).toList();
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    child: Wrap(
+                      children: [
+                        GlassContainer(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Safety Tips', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+                              const SizedBox(height: 8),
+                              for (final t in items) ...[
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Icon(Icons.info_outline, color: Colors.white70),
+                                    const SizedBox(width: 8),
+                                    Expanded(child: Text(t, style: const TextStyle(color: Colors.white))),
+                                  ],
                                 ),
-                                const SizedBox(width: 8),
-                                _Badge(label: _incident == 'Idle' ? 'Idle' : 'Guidance Ready', color: _incidentColor()),
+                                const SizedBox(height: 10),
                               ],
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              _incident == 'Idle'
-                                  ? 'Select an incident type to get tailored routes and tips.'
-                                  : 'Routes adapt based on your location. Avoid elevators and follow staff instructions.',
-                              style: TextStyle(color: Colors.white.withOpacity(0.8)),
-                            ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Simple AR route painter: draws a smooth path from bottom center upward to suggest direction
+class _ArRoutePainter extends CustomPainter {
+  _ArRoutePainter({required this.color});
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path();
+    final start = Offset(size.width * 0.5, size.height * 0.85);
+    final mid1 = Offset(size.width * 0.5, size.height * 0.6);
+    final mid2 = Offset(size.width * 0.6, size.height * 0.35);
+    final end = Offset(size.width * 0.65, size.height * 0.18);
+
+    path.moveTo(start.dx, start.dy);
+    path.cubicTo(
+      start.dx, start.dy - 80,
+      mid1.dx + 40, mid1.dy - 60,
+      mid1.dx + 20, mid1.dy - 40,
+    );
+    path.quadraticBezierTo(mid2.dx - 10, mid2.dy, end.dx, end.dy);
+
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawPath(path, stroke);
+
+    // Draw arrow head at end
+    final arrowPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    const arrowSize = 10.0;
+    final arrowPath = Path();
+    arrowPath.moveTo(end.dx, end.dy);
+    arrowPath.lineTo(end.dx - arrowSize, end.dy + arrowSize * 1.6);
+    arrowPath.lineTo(end.dx + arrowSize, end.dy + arrowSize * 1.6);
+    arrowPath.close();
+    canvas.drawPath(arrowPath, arrowPaint);
+
+    // Subtle dashed halo
+    final dash = Paint()
+      ..color = Colors.white.withOpacity(0.2)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    canvas.drawPath(path, dash);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ArRoutePainter oldDelegate) => oldDelegate.color != color;
+}
+
+class _EmergencyArOverlay extends StatelessWidget {
+  const _EmergencyArOverlay({
+    required this.incident,
+    required this.exits,
+    required this.steps,
+    required this.tips,
+    required this.accent,
+    required this.onIncidentChange,
+    required this.selectedExitName,
+    required this.onSelectExit,
+    required this.onClearTarget,
+    required this.onShowTips,
+  });
+
+  final String incident;
+  final List<_ExitItem> exits;
+  final List<_StepItem> steps;
+  final List<String> tips;
+  final Color accent;
+  final ValueChanged<String> onIncidentChange;
+  final String? selectedExitName;
+  final ValueChanged<String> onSelectExit;
+  final VoidCallback onClearTarget;
+  final VoidCallback onShowTips;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color incidentColor = incident == 'Fire'
+        ? const Color(0xFFEF4444)
+        : (incident == 'Earthquake' ? const Color(0xFFF59E0B) : accent);
+    // Determine nearest open exit
+    final List<_ExitItem> openExits = exits.where((e) => e.status.toLowerCase() != 'blocked').toList();
+    _ExitItem? nearest;
+    if (openExits.isNotEmpty) {
+      nearest = openExits.reduce((a, b) => a.distanceM <= b.distanceM ? a : b);
+    }
+    final bool isNear = nearest != null && nearest.distanceM <= 20;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // Center guidance arrow and text
+        Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.keyboard_arrow_up_rounded, size: 96, color: Colors.white),
+              const SizedBox(height: 8),
+              Text(
+                incident == 'Idle'
+                    ? 'Select an incident'
+                    : (selectedExitName == null
+                        ? 'Pick an exit to guide'
+                        : 'Guiding to $selectedExitName...'),
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+              ),
+              if (selectedExitName != null) ...[
+                const SizedBox(height: 6),
+                GlassContainer(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.assistant_navigation, color: Colors.white, size: 16),
+                      const SizedBox(width: 6),
+                      const Text('Head straight for 20m', style: TextStyle(color: Colors.white)),
+                      const SizedBox(width: 8),
+                      InkWell(
+                        onTap: onClearTarget,
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.close, color: Colors.white70, size: 16),
+                            SizedBox(width: 4),
+                            Text('Clear', style: TextStyle(color: Colors.white70, fontSize: 12)),
                           ],
                         ),
-                      )
+                      ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 12),
-                // Incident chips
-                Row(
-                  children: [
-                    _IncidentChip(
-                      label: 'Fire',
-                      selected: _incident == 'Fire',
-                      color: const Color(0xFFEF4444),
-                      onTap: () => setState(() {
-                        _incident = 'Fire';
-                        _guiding = false;
-                      }),
-                    ),
-                    const SizedBox(width: 8),
-                    _IncidentChip(
-                      label: 'Earthquake',
-                      selected: _incident == 'Earthquake',
-                      color: const Color(0xFFF59E0B),
-                      onTap: () => setState(() {
-                        _incident = 'Earthquake';
-                        _guiding = false;
-                      }),
-                    ),
-                    const SizedBox(width: 8),
-                    _IncidentChip(
-                      label: 'Other',
-                      selected: _incident == 'Other',
-                      color: const Color(0xFF63C1E3),
-                      onTap: () => setState(() {
-                        _incident = 'Other';
-                        _guiding = false;
-                      }),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                // Map placeholder + CTA
-                GlassContainer(
-                  padding: EdgeInsets.zero,
-                  child: SizedBox(
-                    height: 220,
-                    child: Stack(
+              ]
+            ],
+          ),
+        ),
+        // Top controls
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Incident chips (switch within AR)
+                  Row(
+                    children: [
+                      _IncidentChip(
+                        label: 'Fire',
+                        selected: incident == 'Fire',
+                        color: const Color(0xFFEF4444),
+                        onTap: () => onIncidentChange('Fire'),
+                      ),
+                      const SizedBox(width: 8),
+                      _IncidentChip(
+                        label: 'Earthquake',
+                        selected: incident == 'Earthquake',
+                        color: const Color(0xFFF59E0B),
+                        onTap: () => onIncidentChange('Earthquake'),
+                      ),
+                      const SizedBox(width: 8),
+                      _IncidentChip(
+                        label: 'Other',
+                        selected: incident == 'Other',
+                        color: const Color(0xFF63C1E3),
+                        onTap: () => onIncidentChange('Other'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  // Header controls row (status, Tips, Nearest Exit)
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
                       children: [
-                        Positioned.fill(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.white.withOpacity(0.06),
-                                  Colors.black.withOpacity(0.06),
+                      GlassContainer(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.warning_amber_rounded, color: incidentColor, size: 16),
+                            const SizedBox(width: 6),
+                            Text(
+                              incident == 'Idle' ? 'No Incident' : '$incident Mode',
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      InkWell(
+                        onTap: onShowTips,
+                        borderRadius: BorderRadius.circular(12),
+                        child: GlassContainer(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.tips_and_updates, color: Colors.white, size: 16),
+                              SizedBox(width: 6),
+                              Text('Tips', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      if (nearest != null)
+                        GlassContainer(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.directions_walk,
+                                color: isNear ? const Color(0xFF10B981) : Colors.white,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 6),
+                              InkWell(
+                                onTap: () => onSelectExit(nearest!.name.split(' - ').first),
+                                child: Text(
+                                  '${nearest!.name.split(' - ').first} • ${nearest.distanceM}m • ${nearest.etaMin} min',
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: (isNear ? const Color(0xFF10B981) : Colors.white24).withOpacity(0.25),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.white.withOpacity(0.25)),
+                                ),
+                                child: Text(
+                                  isNear ? 'Near' : 'Far',
+                                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                  ),
+                  const SizedBox(height: 8),
+                  // Quick exits row
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (final e in exits)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8.0),
+                            child: GlassContainer(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    e.status == 'Blocked' ? Icons.block : Icons.exit_to_app,
+                                    color: e.status == 'Blocked'
+                                        ? const Color(0xFFEF4444)
+                                        : (selectedExitName == e.name.split(' - ').first
+                                            ? const Color(0xFF10B981)
+                                            : Colors.white),
+                                    size: 14,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  InkWell(
+                                    onTap: e.status == 'Blocked' ? null : () => onSelectExit(e.name.split(' - ').first),
+                                    child: Text(
+                                      e.name.split(' - ').first,
+                                      style: TextStyle(
+                                        color: selectedExitName == e.name.split(' - ').first
+                                            ? const Color(0xFF10B981)
+                                            : Colors.white,
+                                      ),
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
-                            alignment: Alignment.center,
-                            child: const Text(
-                              'EMERGENCY MAP HERE',
-                              style: TextStyle(color: Colors.white54),
-                            ),
                           ),
-                        ),
-                        Positioned.fill(child: CustomPaint(painter: _EmergencyRoutePainter())),
-                        // YOU dot
-                        Positioned(
-                          left: 40,
-                          bottom: 40,
-                          child: _YouDot(),
-                        ),
-                        // Exit pins
-                        const Positioned(right: 24, top: 36, child: _ExitPin(label: 'Exit A')),
-                        const Positioned(right: 20, bottom: 28, child: _ExitPin(label: 'Exit B')),
-                        // CTA
-                        Positioned(
-                          left: 12,
-                          right: 12,
-                          bottom: 12,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _appAccent,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                            ),
-                            onPressed: _incident == 'Idle'
-                                ? null
-                                : () => setState(() {
-                                      _guiding = true;
-                                    }),
-                            child: Text(_guiding ? 'Guidance Active' : 'Start Guidance'),
-                          ),
-                        ),
                       ],
                     ),
+                  ),
+                  // (Nearest exit indicator moved into header row above)
+                ],
+              ),
+            ),
+          ),
+        ),
+        // Bottom step card
+        Positioned(
+          left: 12,
+          right: 12,
+          bottom: 16,
+          child: GlassContainer(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Icon(steps.first.icon, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    steps.first.text,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
                   ),
                 ),
-                const SizedBox(height: 12),
-                if (_guiding) ...[
-                  // Step-by-step panel
-                  GlassContainer(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.navigation_rounded, color: _appAccent),
-                            const SizedBox(width: 8),
-                            const Text('Step-by-step Guidance',
-                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                            const Spacer(),
-                            TextButton(
-                              onPressed: () => setState(() => _guiding = false),
-                              child: const Text('End', style: TextStyle(color: Colors.white)),
-                            )
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        for (int i = 0; i < _steps.length; i++) ...[
-                          Row(
-                            children: [
-                              Icon(_steps[i].icon, color: Colors.white),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  _steps[i].text,
-                                  style: const TextStyle(color: Colors.white),
-                                ),
-                              ),
-                              if (i == 0) _Badge(label: 'Now', color: _appAccent),
-                            ],
-                          ),
-                          if (i != _steps.length - 1) const Divider(color: Colors.white24, height: 16),
-                        ],
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            OutlinedButton(
-                              onPressed: () {},
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.white,
-                                side: BorderSide(color: Colors.white.withOpacity(0.4)),
-                              ),
-                              child: const Text('Reroute'),
-                            ),
-                            const SizedBox(width: 8),
-                            OutlinedButton(
-                              onPressed: () {},
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.white,
-                                side: BorderSide(color: Colors.white.withOpacity(0.4)),
-                              ),
-                              child: const Text('Pause'),
-                            ),
-                          ],
-                        )
-                      ],
-                    ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: incidentColor.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.white.withOpacity(0.25)),
                   ),
-                ] else ...[
-                  // Nearest exits list
-                  const Text('Nearest Exits',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
-                  const SizedBox(height: 8),
-                  for (final e in _exits) ...[
-                    GlassContainer(
-                      padding: const EdgeInsets.all(12),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: e.status == 'Blocked'
-                                  ? const Color(0xFFEF4444).withOpacity(0.15)
-                                  : _appAccent.withOpacity(0.15),
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white.withOpacity(0.3)),
-                            ),
-                            alignment: Alignment.center,
-                            child: Icon(
-                              e.status == 'Blocked' ? Icons.block : Icons.exit_to_app,
-                              color: e.status == 'Blocked' ? const Color(0xFFEF4444) : _appAccent,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(e.name,
-                                    style: const TextStyle(
-                                        color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14)),
-                                const SizedBox(height: 4),
-                                Text('${e.floor} • ${e.distanceM}m • ${e.etaMin} min',
-                                    style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                              ],
-                            ),
-                          ),
-                          _Badge(
-                            label: e.status,
-                            color: e.status == 'Blocked' ? const Color(0xFFEF4444) : _appAccent,
-                          )
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                ],
-                const SizedBox(height: 12),
-                // Safety Tips
-                const Text('Safety Tips',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
-                const SizedBox(height: 8),
-                for (final t in _tips) ...[
-                  GlassContainer(
-                    padding: const EdgeInsets.all(12),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(Icons.info_outline, color: Colors.white70),
-                        const SizedBox(width: 10),
-                        Expanded(child: Text(t, style: const TextStyle(color: Colors.white))),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                const SizedBox(height: 12),
-                // Contacts
-                const Text('Emergency Contacts',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
-                const SizedBox(height: 8),
-                Row(
-                  children: const [
-                    _ContactButton(label: 'Security', icon: Icons.local_police_outlined),
-                    SizedBox(width: 8),
-                    _ContactButton(label: 'Clinic', icon: Icons.health_and_safety_outlined),
-                    SizedBox(width: 8),
-                    _ContactButton(label: '911', icon: Icons.call_outlined),
-                  ],
+                  child: const Text('Now', style: TextStyle(color: Colors.white, fontSize: 12)),
                 )
               ],
             ),
-          )
-        ],
-      ),
+          ),
+        ),
+      ],
     );
   }
 }

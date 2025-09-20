@@ -299,8 +299,8 @@ const List<_Department> _mockDepartments = [
     phone: '555-1234',
   ),
   _Department(
-    name: 'Admissions',
-    location: 'Student Services Center, Level 2',
+    name: 'CICT Office',
+    location: 'Office Services Center, 3rd Floor',
     weeklyHours: {
       1: [ _TimeRange('09:00', '12:00'), _TimeRange('13:00', '16:00') ],
       2: [ _TimeRange('09:00', '12:00'), _TimeRange('13:00', '16:00') ],
@@ -312,7 +312,7 @@ const List<_Department> _mockDepartments = [
   ),
   _Department(
     name: 'Library',
-    location: 'Main Library, Ground Floor',
+    location: 'Main Library, 4th Floor',
     weeklyHours: {
       0: [ _TimeRange('10:00', '16:00') ],
       1: [ _TimeRange('08:00', '20:00') ],
