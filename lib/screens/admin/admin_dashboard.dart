@@ -3,6 +3,7 @@ import 'package:Gabay/models/room.dart';
 
 import 'package:flutter/material.dart';
 import 'room_management_screen_new.dart';
+import 'department_hours_management_screen.dart';
 import 'package:flutter/foundation.dart';
 import '../../services/news_service.dart';
 import '../../models/news.dart';
@@ -88,7 +89,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         extendBodyBehindAppBar: true,
         appBar: AppBar(
@@ -100,6 +101,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             tabs: const [
               Tab(icon: Icon(Icons.dashboard), text: 'Dashboard'),
               Tab(icon: Icon(Icons.meeting_room), text: 'Room Management'),
+              Tab(icon: Icon(Icons.apartment_rounded), text: 'Department Hours'),
             ],
             labelColor: Colors.white,
             unselectedLabelColor: Colors.white70,
@@ -121,6 +123,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ),
                 // Room Management Tab
                 const RoomManagementScreen(),
+                // Department Hours Tab
+                const DepartmentHoursManagementScreen(),
               ],
             ),
           ],

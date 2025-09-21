@@ -1,6 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../widgets/glass_container.dart';
+import '../../models/department_hours.dart';
+import '../../services/department_hours_service.dart';
 
 class DeptHoursScreen extends StatefulWidget {
   const DeptHoursScreen({super.key});
@@ -11,15 +13,15 @@ class DeptHoursScreen extends StatefulWidget {
 
 class _DeptHoursScreenState extends State<DeptHoursScreen> {
   static const Color _accent = Color(0xFF63C1E3);
-
-  final List<_Department> _allDepts = _mockDepartments;
+  List<DepartmentHours> _allDepts = const <DepartmentHours>[];
   String _query = '';
   int _selectedDayIndex = DateTime.now().weekday % 7; // 0=Sun..6=Sat
 
-  List<_Department> get _filtered {
+  List<DepartmentHours> get _filtered {
     final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return _allDepts;
-    return _allDepts
+    final base = _allDepts.where((d) => d.isOffice).toList();
+    if (q.isEmpty) return base;
+    return base
         .where((d) => d.name.toLowerCase().contains(q) || d.location.toLowerCase().contains(q))
         .toList();
   }
@@ -83,20 +85,31 @@ class _DeptHoursScreenState extends State<DeptHoursScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                if (_filtered.isEmpty)
-                  const Center(
-                    child: Text('No departments found', style: TextStyle(color: Colors.white70)),
-                  )
-                else ...[
-                  for (final dept in _filtered) ...[
-                    _DeptCard(
-                      dept: dept,
-                      dayIndex: _selectedDayIndex,
-                      accent: _accent,
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                ]
+                // Data section
+                StreamBuilder<List<DepartmentHours>>(
+                  stream: DepartmentHoursService.instance.list(),
+                  builder: (context, snapshot) {
+                    _allDepts = snapshot.data ?? const <DepartmentHours>[];
+                    final list = _filtered;
+                    if (list.isEmpty) {
+                      return const Center(
+                        child: Text('No departments found', style: TextStyle(color: Colors.white70)),
+                      );
+                    }
+                    return Column(
+                      children: [
+                        for (final dept in list) ...[
+                          _DeptCard(
+                            dept: dept,
+                            dayIndex: _selectedDayIndex,
+                            accent: _accent,
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                      ],
+                    );
+                  },
+                ),
               ],
             ),
           ),
@@ -108,13 +121,13 @@ class _DeptHoursScreenState extends State<DeptHoursScreen> {
 
 class _DeptCard extends StatelessWidget {
   const _DeptCard({required this.dept, required this.dayIndex, required this.accent});
-  final _Department dept;
+  final DepartmentHours dept;
   final int dayIndex; // 0=Sun..6=Sat
   final Color accent;
 
   @override
   Widget build(BuildContext context) {
-    final todayRanges = dept.weeklyHours[dayIndex] ?? const <_TimeRange>[];
+    final todayRanges = dept.weeklyHours[dayIndex] ?? const <TimeRange>[];
     final status = _statusFor(todayRanges, DateTime.now());
     final isOpen = status.isOpen;
     final statusText = isOpen ? 'Open now' : 'Closed';
@@ -200,7 +213,7 @@ class _DeptCard extends StatelessWidget {
           Row(
             children: [
               TextButton.icon(
-                onPressed: () {},
+                onPressed: dept.phone == null ? null : () {},
                 icon: const Icon(Icons.call, color: Colors.white),
                 label: const Text('Call', style: TextStyle(color: Colors.white)),
                 style: TextButton.styleFrom(foregroundColor: Colors.white),
@@ -219,9 +232,9 @@ class _DeptCard extends StatelessWidget {
     );
   }
 
-  static String _formatRange(_TimeRange tr) => '${tr.start} - ${tr.end}';
+  static String _formatRange(TimeRange tr) => '${tr.start} - ${tr.end}';
 
-  static _OpenStatus _statusFor(List<_TimeRange> ranges, DateTime now) {
+  static _OpenStatus _statusFor(List<TimeRange> ranges, DateTime now) {
     if (ranges.isEmpty) return const _OpenStatus(false);
     final hm = now.hour * 60 + now.minute;
     for (final r in ranges) {
@@ -269,97 +282,7 @@ class _OpenStatus {
   final bool isOpen;
 }
 
-class _TimeRange {
-  const _TimeRange(this.start, this.end);
-  final String start; // HH:MM 24h
-  final String end;   // HH:MM 24h
-}
-
-class _Department {
-  const _Department({required this.name, required this.location, required this.weeklyHours, this.phone});
-  final String name;
-  final String location;
-  final Map<int, List<_TimeRange>> weeklyHours; // key: 0=Sun..6=Sat
-  final String? phone;
-}
-
 const List<String> _days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-const List<_Department> _mockDepartments = [
-  _Department(
-    name: 'Registrar\'s Office',
-    location: 'Admin Building, Room 101',
-    weeklyHours: {
-      1: [ _TimeRange('08:00', '12:00'), _TimeRange('13:00', '17:00') ],
-      2: [ _TimeRange('08:00', '12:00'), _TimeRange('13:00', '17:00') ],
-      3: [ _TimeRange('08:00', '12:00'), _TimeRange('13:00', '17:00') ],
-      4: [ _TimeRange('08:00', '12:00'), _TimeRange('13:00', '17:00') ],
-      5: [ _TimeRange('08:00', '12:00'), _TimeRange('13:00', '16:00') ],
-    },
-    phone: '555-1234',
-  ),
-  _Department(
-    name: 'CICT Office',
-    location: 'Office Services Center, 3rd Floor',
-    weeklyHours: {
-      1: [ _TimeRange('09:00', '12:00'), _TimeRange('13:00', '16:00') ],
-      2: [ _TimeRange('09:00', '12:00'), _TimeRange('13:00', '16:00') ],
-      3: [ _TimeRange('09:00', '12:00'), _TimeRange('13:00', '16:00') ],
-      4: [ _TimeRange('09:00', '12:00'), _TimeRange('13:00', '16:00') ],
-      5: [ _TimeRange('09:00', '15:00') ],
-    },
-    phone: '555-5678',
-  ),
-  _Department(
-    name: 'Library',
-    location: 'Main Library, 4th Floor',
-    weeklyHours: {
-      0: [ _TimeRange('10:00', '16:00') ],
-      1: [ _TimeRange('08:00', '20:00') ],
-      2: [ _TimeRange('08:00', '20:00') ],
-      3: [ _TimeRange('08:00', '20:00') ],
-      4: [ _TimeRange('08:00', '20:00') ],
-      5: [ _TimeRange('08:00', '18:00') ],
-      6: [ _TimeRange('10:00', '16:00') ],
-    },
-    phone: '555-2468',
-  ),
-  _Department(
-    name: 'Cashier',
-    location: 'Finance Office, Room 203',
-    weeklyHours: {
-      1: [ _TimeRange('08:30', '12:00'), _TimeRange('13:00', '16:30') ],
-      2: [ _TimeRange('08:30', '12:00'), _TimeRange('13:00', '16:30') ],
-      3: [ _TimeRange('08:30', '12:00'), _TimeRange('13:00', '16:30') ],
-      4: [ _TimeRange('08:30', '12:00'), _TimeRange('13:00', '16:30') ],
-      5: [ _TimeRange('08:30', '15:00') ],
-    },
-  ),
-  _Department(
-    name: 'Clinic',
-    location: 'Health Services, Ground Floor',
-    weeklyHours: {
-      1: [ _TimeRange('08:00', '17:00') ],
-      2: [ _TimeRange('08:00', '17:00') ],
-      3: [ _TimeRange('08:00', '17:00') ],
-      4: [ _TimeRange('08:00', '17:00') ],
-      5: [ _TimeRange('08:00', '17:00') ],
-    },
-    phone: '555-1357',
-  ),
-  _Department(
-    name: 'IT Helpdesk',
-    location: 'Tech Hub, Room 310',
-    weeklyHours: {
-      1: [ _TimeRange('08:00', '18:00') ],
-      2: [ _TimeRange('08:00', '18:00') ],
-      3: [ _TimeRange('08:00', '18:00') ],
-      4: [ _TimeRange('08:00', '18:00') ],
-      5: [ _TimeRange('08:00', '18:00') ],
-    },
-    phone: '555-9999',
-  ),
-];
 
 class _Background extends StatelessWidget {
   const _Background();

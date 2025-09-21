@@ -13,6 +13,7 @@ class DepartmentHours {
   final String name;
   final String location;
   final String? phone;
+  final bool isOffice; // true for offices (Registrar, Library, etc.)
   // key: 0=Sun..6=Sat
   final Map<int, List<TimeRange>> weeklyHours;
 
@@ -22,6 +23,7 @@ class DepartmentHours {
     required this.location,
     required this.weeklyHours,
     this.phone,
+    this.isOffice = true,
   });
 
   DepartmentHours copyWith({
@@ -29,12 +31,14 @@ class DepartmentHours {
     String? name,
     String? location,
     String? phone,
+    bool? isOffice,
     Map<int, List<TimeRange>>? weeklyHours,
   }) => DepartmentHours(
         id: id ?? this.id,
         name: name ?? this.name,
         location: location ?? this.location,
         phone: phone ?? this.phone,
+        isOffice: isOffice ?? this.isOffice,
         weeklyHours: weeklyHours ?? this.weeklyHours,
       );
 }
