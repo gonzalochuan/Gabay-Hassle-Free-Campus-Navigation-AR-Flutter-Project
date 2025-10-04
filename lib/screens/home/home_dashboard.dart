@@ -3,13 +3,15 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:Gabay/models/user.dart';
-import 'package:Gabay/services/user_service.dart';
+import 'package:Gabay/repositories/auth_repository.dart';
+import 'package:Gabay/repositories/profiles_repository.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../navigate/navigate_screen.dart';
 import '../room_scanner/room_scanner_screen.dart';
 import '../news/news_feed_screen.dart';
 import '../emergency/emergency_screen.dart';
 import '../dept_hours/dept_hours_screen.dart';
-
+ 
 class HomeDashboard extends StatelessWidget {
   const HomeDashboard({super.key, this.userName = 'Gonzalo Chuan'});
 
@@ -179,32 +181,56 @@ class _HeaderCard extends StatefulWidget {
 class _HeaderCardState extends State<_HeaderCard> {
   bool _showDetails = false;
 
-  static AppUser _resolveUser(String name) {
+  // Live profile fields
+  String _name = '';
+  String _email = '';
+  String _course = '';
+  bool _isAdmin = false;
+  bool _active = true;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
     try {
-      final list = UserService.instance.current;
-      // 1) Try exact name match
-      final byName = list.where((u) => u.name.toLowerCase() == name.toLowerCase());
-      if (byName.isNotEmpty) return byName.first;
-      // 2) Fallback to first non-admin user with data
-      final withData = list.where((u) => u.role == UserRole.user && ((u.course ?? u.department ?? u.block ?? u.yearId ?? u.yearSection) != null));
-      if (withData.isNotEmpty) return withData.first;
-      // 3) Fallback to first user if any
-      if (list.isNotEmpty) return list.first;
-      // Final fallback
-      return AppUser(id: 'local', name: name, email: '', role: UserRole.user);
+      final user = Supabase.instance.client.auth.currentUser;
+      Map<String, dynamic>? p;
+      if (user != null) {
+        p = await ProfilesRepository.instance.getMyProfile();
+      }
+      setState(() {
+        _name = (p != null && (p['name'] as String?)?.isNotEmpty == true) ? p!['name'] as String : widget.userName;
+        _email = (p != null && (p['email'] as String?)?.isNotEmpty == true)
+            ? p!['email'] as String
+            : (user?.email ?? '');
+        _course = (p != null && (p['course'] as String?)?.isNotEmpty == true)
+            ? p!['course'] as String
+            : ((p != null && (p['department'] as String?)?.isNotEmpty == true) ? p!['department'] as String : '');
+        _isAdmin = (p != null && p['is_admin'] == true);
+        _active = (p != null && p['active'] == true);
+        _loading = false;
+      });
     } catch (_) {
-      return AppUser(id: 'local', name: name, email: '', role: UserRole.user);
+      setState(() {
+        _name = widget.userName;
+        _email = '';
+        _course = '';
+        _isAdmin = false;
+        _loading = false;
+      });
     }
   }
 
-  static String _buildTooltip(AppUser u) {
-    final isAdmin = u.role == UserRole.admin || u.email.toLowerCase() == 'admin@seait.edu';
-    final course = (u.course ?? u.department ?? '').trim();
+  String _buildTooltip() {
     final lines = <String>[
-      'Role: ${describeEnum(u.role)}',
-      'Username: ${u.name}',
-      if (!isAdmin && course.isNotEmpty) 'Course: $course',
-      if (u.email.isNotEmpty) 'Email: ${u.email}',
+      'Role: ' + (_isAdmin ? 'admin' : 'user'),
+      'Username: ' + (_name.isNotEmpty ? _name : widget.userName),
+      if (!_isAdmin && _course.isNotEmpty) 'Course: ' + _course,
+      if (_email.isNotEmpty) 'Email: ' + _email,
     ];
     return lines.join('\n');
   }
@@ -253,10 +279,9 @@ class _HeaderCardState extends State<_HeaderCard> {
 
   @override
   Widget build(BuildContext context) {
-    final AppUser user = _resolveUser(widget.userName);
-    final String tooltipMsg = _buildTooltip(user);
-    final bool isAdmin = user.role == UserRole.admin || user.email.toLowerCase() == 'admin@seait.edu';
-    final String courseStr = isAdmin ? '' : ((user.course ?? user.department) ?? '').trim();
+    final String tooltipMsg = _buildTooltip();
+    final bool isAdmin = _isAdmin;
+    final String courseStr = isAdmin ? '' : _course;
     return _GlassContainer(
       radius: 28,
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
@@ -273,7 +298,7 @@ class _HeaderCardState extends State<_HeaderCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Welcome, ${widget.userName}',
+                      'Welcome, ' + ((_name.isNotEmpty ? _name : widget.userName)),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 20,
@@ -330,9 +355,9 @@ class _HeaderCardState extends State<_HeaderCard> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(user.name, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
-                            if (user.email.isNotEmpty)
-                              Text(user.email, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                            Text(_name.isNotEmpty ? _name : widget.userName, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+                            if (_email.isNotEmpty)
+                              Text(_email, style: const TextStyle(color: Colors.white70, fontSize: 12)),
                           ],
                         ),
                       ),
@@ -344,16 +369,37 @@ class _HeaderCardState extends State<_HeaderCard> {
                     runSpacing: 8,
                     children: [
                       if (courseStr.isNotEmpty) _profileChip(Icons.school_outlined, 'Course: ' + courseStr),
-                      _profileChip(Icons.badge_outlined, 'Role: ${describeEnum(user.role)}'),
+                      _profileChip(Icons.badge_outlined, 'Role: ' + (isAdmin ? 'admin' : 'user')),
                       _actionChip(
                         icon: Icons.logout,
                         text: 'Logout',
-                        onTap: () {
-                          // Pop all routes and return to the app's root (e.g., welcome/login screen)
+                        onTap: () async {
+                          try {
+                            await AuthRepository.instance.signOut();
+                          } catch (_) {}
+                          if (!mounted) return;
+                          final messenger = ScaffoldMessenger.of(context);
+                          messenger.clearMaterialBanners();
+                          messenger.showMaterialBanner(
+                            const MaterialBanner(
+                              backgroundColor: Color(0xFF16A34A),
+                              elevation: 2,
+                              leading: Icon(Icons.check_circle, color: Colors.white),
+                              content: Text(
+                                'You have been logged out.',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                              ),
+                              actions: [SizedBox.shrink()],
+                              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            ),
+                          );
+                          await Future.delayed(const Duration(seconds: 3));
+                          messenger.hideCurrentMaterialBanner();
+                          if (!mounted) return;
                           Navigator.of(context).popUntil((route) => route.isFirst);
                         },
                       ),
-                      if (!user.active) _profileChip(Icons.person_off_outlined, 'Inactive'),
+                      if (!_active) _profileChip(Icons.person_off_outlined, 'Inactive'),
                     ],
                   ),
                 ],

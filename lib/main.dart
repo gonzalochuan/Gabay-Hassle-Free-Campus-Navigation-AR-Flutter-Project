@@ -4,8 +4,18 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'screens/home/home_dashboard.dart';
 import 'widgets/glass_container.dart';
 import 'screens/admin/admin_dashboard.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'core/env.dart';
+import 'repositories/auth_repository.dart';
+import 'repositories/profiles_repository.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: '.env');
+  if (Env.isConfigured) {
+    await Supabase.initialize(url: Env.supabaseUrl, anonKey: Env.supabaseAnonKey);
+  }
   runApp(const MyApp());
 }
 
@@ -17,6 +27,34 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
+  Future<void> _showTopSuccessBanner(String message) async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearMaterialBanners();
+    messenger.showMaterialBanner(
+      MaterialBanner(
+        backgroundColor: const Color(0xFF16A34A), // green
+        elevation: 2,
+        leading: const Icon(Icons.check_circle, color: Colors.white),
+        content: Text(
+          message,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+        ),
+        actions: [
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.close, color: Colors.white),
+            onPressed: () {
+              messenger.hideCurrentMaterialBanner();
+            },
+          ),
+        ],
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      ),
+    );
+    await Future.delayed(const Duration(seconds: 5));
+    messenger.hideCurrentMaterialBanner();
+  }
+
   final _nameController = TextEditingController();
   final _courseController = TextEditingController();
   final _emailController = TextEditingController();
@@ -165,13 +203,50 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               height: 56,
                               child: ElevatedButton(
                                 onPressed: _canRegister
-                                    ? () {
+                                    ? () async {
                                         final name = _nameController.text.trim();
-                                        Navigator.of(context).push(
-                                          MaterialPageRoute(
-                                            builder: (_) => HomeDashboard(userName: name.isNotEmpty ? name : 'Guest'),
-                                          ),
-                                        );
+                                        final course = _courseController.text.trim();
+                                        final email = _emailController.text.trim();
+                                        final pass = _passwordController.text;
+                                        try {
+                                          // Prevent registering the fixed admin account from the app
+                                          if (email.toLowerCase() == 'admin@seait.edu') {
+                                            final messenger = ScaffoldMessenger.of(context);
+                                            messenger.clearMaterialBanners();
+                                            messenger.showMaterialBanner(
+                                              const MaterialBanner(
+                                                backgroundColor: Color(0xFFB91C1C), // red
+                                                elevation: 2,
+                                                leading: Icon(Icons.error_outline, color: Colors.white),
+                                                content: Text(
+                                                  'This admin account is managed by the school. Please use Login.',
+                                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                                                ),
+                                                actions: [SizedBox.shrink()],
+                                                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                              ),
+                                            );
+                                            await Future.delayed(const Duration(seconds: 5));
+                                            messenger.hideCurrentMaterialBanner();
+                                            return;
+                                          }
+                                          final res = await AuthRepository.instance.signUp(email: email, password: pass);
+                                          // If immediately authenticated (email confirmation disabled), upsert profile.
+                                          if (Supabase.instance.client.auth.currentUser != null) {
+                                            await ProfilesRepository.instance.upsertMyProfile(
+                                              name: name.isNotEmpty ? name : 'User',
+                                              email: email,
+                                              course: course.isEmpty ? null : course,
+                                            );
+                                          }
+                                          if (!mounted) return;
+                                          Navigator.of(context).pop('registered'); // Immediately back to Login; Login will show banner
+                                        } catch (e) {
+                                          if (!mounted) return;
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('Sign up failed: $e')),
+                                          );
+                                        }
                                       }
                                     : null,
                                 style: ElevatedButton.styleFrom(
@@ -482,23 +557,37 @@ class _SignUpScreenState extends State<SignUpScreen> {
                               height: 56,
                               child: ElevatedButton(
                                 onPressed: _canLogin
-                                    ? () {
+                                    ? () async {
                                         final email = _emailController.text.trim();
-                                        final String name = (email.contains('@') && email.split('@').first.isNotEmpty)
-                                            ? email.split('@').first
-                                            : 'Guest';
-                                        final bool isAdmin = (email.toLowerCase() == 'admin@seait.edu');
-                                        if (isAdmin) {
-                                          Navigator.of(context).push(
-                                            MaterialPageRoute(
-                                              builder: (_) => const AdminDashboard(),
-                                            ),
-                                          );
-                                        } else {
-                                          Navigator.of(context).push(
-                                            MaterialPageRoute(
-                                              builder: (_) => HomeDashboard(userName: name),
-                                            ),
+                                        final pass = _passwordController.text.trim();
+                                        try {
+                                          await AuthRepository.instance.signIn(email: email, password: pass);
+                                          await ProfilesRepository.instance.updateLastSignInNow();
+                                          final profile = await ProfilesRepository.instance.getMyProfile();
+                                          final isAdmin = await ProfilesRepository.instance.isCurrentUserAdmin();
+                                          if (!mounted) return;
+                                          if (isAdmin) {
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (_) => const AdminDashboard(),
+                                              ),
+                                            );
+                                          } else {
+                                            final name = (profile != null && (profile['name'] as String?)?.isNotEmpty == true)
+                                                ? (profile['name'] as String)
+                                                : (email.contains('@') && email.split('@').first.isNotEmpty
+                                                    ? email.split('@').first
+                                                    : 'Guest');
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (_) => HomeDashboard(userName: name),
+                                              ),
+                                            );
+                                          }
+                                        } catch (e) {
+                                          if (!mounted) return;
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('Login failed: $e')),
                                           );
                                         }
                                       }
@@ -512,18 +601,52 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                 child: const Text('Login'),
                               ),
                             ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              height: 44,
+                              child: TextButton(
+                                onPressed: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => const HomeDashboard(userName: 'Guest'),
+                                    ),
+                                  );
+                                },
+                                child: const Text('Continue as Guest', style: TextStyle(color: Colors.white70)),
+                              ),
+                            ),
                             const SizedBox(height: 10),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 const Text('Don\'t have an account?', style: TextStyle(color: Colors.white70)),
                                 TextButton(
-                                  onPressed: () {
-                                    Navigator.of(context).push(
+                                  onPressed: () async {
+                                    final result = await Navigator.of(context).push(
                                       MaterialPageRoute(
                                         builder: (_) => const RegisterScreen(),
                                       ),
                                     );
+                                    if (!mounted) return;
+                                    if (result == 'registered') {
+                                      final messenger = ScaffoldMessenger.of(context);
+                                      messenger.clearMaterialBanners();
+                                      messenger.showMaterialBanner(
+                                        MaterialBanner(
+                                          backgroundColor: const Color(0xFF16A34A),
+                                          elevation: 2,
+                                          leading: const Icon(Icons.check_circle, color: Colors.white),
+                                          content: const Text(
+                                            'Account created successfully. Please sign in.',
+                                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                                          ),
+                                          actions: const [SizedBox.shrink()],
+                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                        ),
+                                      );
+                                      await Future.delayed(const Duration(seconds: 5));
+                                      messenger.hideCurrentMaterialBanner();
+                                    }
                                   },
                                   style: TextButton.styleFrom(foregroundColor: Colors.blue),
                                   child: const Text('Register'),

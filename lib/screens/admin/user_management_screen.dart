@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:Gabay/models/user.dart';
-import 'package:Gabay/services/user_service.dart';
+import 'package:Gabay/repositories/profiles_repository.dart';
+import 'package:Gabay/repositories/admin_repository.dart';
 import '../../widgets/glass_container.dart';
 
 class UserManagementScreen extends StatelessWidget {
@@ -60,20 +61,37 @@ class UserManagementScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   Expanded(
-                    child: StreamBuilder<List<AppUser>>(
-                      stream: UserService.instance.list(),
+                    child: StreamBuilder<List<Map<String, dynamic>>>(
+                      stream: ProfilesRepository.instance.streamAll(),
                       builder: (context, snap) {
-                        final users = snap.data ?? const <AppUser>[];
+                        final rows = snap.data ?? const <Map<String, dynamic>>[];
+                        List<AppUser> users = rows.map(_mapRowToAppUser).toList(growable: false);
                         if (users.isEmpty) {
-                          return Center(
-                            child: GlassContainer(
-                              radius: 18,
-                              padding: const EdgeInsets.all(16),
-                              child: const Text(
-                                'No users found',
-                                style: TextStyle(color: Colors.white70),
-                              ),
-                            ),
+                          // Fallback to one-time fetch (helps initial load)
+                          return FutureBuilder<List<Map<String, dynamic>>>(
+                            future: ProfilesRepository.instance.listAll(),
+                            builder: (context, f) {
+                              final frows = f.data ?? const <Map<String, dynamic>>[];
+                              final fusers = frows.map(_mapRowToAppUser).toList(growable: false);
+                              if (f.connectionState != ConnectionState.done && fusers.isEmpty) {
+                                return const Center(child: CircularProgressIndicator());
+                              }
+                              if (fusers.isEmpty) {
+                                return Center(
+                                  child: GlassContainer(
+                                    radius: 18,
+                                    padding: const EdgeInsets.all(16),
+                                    child: const Text('No users found', style: TextStyle(color: Colors.white70)),
+                                  ),
+                                );
+                              }
+                              users = fusers;
+                              return ListView.separated(
+                                itemCount: users.length,
+                                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                                itemBuilder: (ctx, i) => _UserRow(user: users[i]),
+                              );
+                            },
                           );
                         }
                         return ListView.separated(
@@ -93,11 +111,34 @@ class UserManagementScreen extends StatelessWidget {
     );
   }
 
+  // Map a Supabase profiles row to the AppUser view model used by the UI
+  static AppUser _mapRowToAppUser(Map<String, dynamic> r) {
+    final bool isAdmin = (r['is_admin'] == true);
+    final DateTime? createdAt = r['created_at'] != null ? DateTime.tryParse(r['created_at'].toString()) : null;
+    final DateTime? lastSignInAt = r['last_sign_in_at'] != null ? DateTime.tryParse(r['last_sign_in_at'].toString()) : null;
+    return AppUser(
+      id: (r['id'] ?? '').toString(),
+      name: (r['name'] ?? '').toString(),
+      email: (r['email'] ?? '').toString(),
+      role: isAdmin ? UserRole.admin : UserRole.user,
+      department: (r['department'] as String?)?.trim(),
+      course: (r['course'] as String?)?.trim(),
+      block: (r['block'] as String?)?.trim(),
+      yearId: (r['year_id'] as String?)?.trim(),
+      active: (r['active'] != false),
+      createdAt: createdAt,
+      lastSignInAt: lastSignInAt,
+      createdBy: (r['created_by'] as String?)?.trim(),
+    );
+  }
+
+  // Disabled for now in favor of Supabase Auth UI.
   static Future<void> _showCreateDialog(BuildContext context) async {
     final nameCtrl = TextEditingController();
     final emailCtrl = TextEditingController();
     final courseCtrl = TextEditingController();
     final deptCtrl = TextEditingController();
+    final passCtrl = TextEditingController();
     UserRole role = UserRole.user;
 
     await showDialog(
@@ -123,6 +164,8 @@ class UserManagementScreen extends StatelessWidget {
                 _UserRow._input(courseCtrl, label: 'Course (optional)'),
                 const SizedBox(height: 10),
                 _UserRow._input(deptCtrl, label: 'Department (optional)'),
+                const SizedBox(height: 10),
+                _UserRow._input(passCtrl, label: 'Temporary Password', obscure: true),
                 const SizedBox(height: 10),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -153,15 +196,48 @@ class UserManagementScreen extends StatelessWidget {
                     const SizedBox(width: 8),
                     ElevatedButton(
                       onPressed: () async {
-                        await UserService.instance.create(
-                          name: nameCtrl.text.trim(),
-                          email: emailCtrl.text.trim(),
-                          role: role,
-                          course: courseCtrl.text.trim().isEmpty ? null : courseCtrl.text.trim(),
-                          department: deptCtrl.text.trim().isEmpty ? null : deptCtrl.text.trim(),
-                          createdBy: 'admin@seait.edu',
-                        );
-                        Navigator.pop(ctx);
+                        try {
+                          final name = nameCtrl.text.trim();
+                          final email = emailCtrl.text.trim();
+                          final pass = passCtrl.text.trim();
+                          final course = courseCtrl.text.trim().isEmpty ? null : courseCtrl.text.trim();
+                          final dept = deptCtrl.text.trim().isEmpty ? null : deptCtrl.text.trim();
+                          if (name.isEmpty || email.isEmpty || pass.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Name, email, and password are required'), backgroundColor: Colors.red),
+                            );
+                            return;
+                          }
+                          await AdminRepository.instance.createUser(
+                            email: email,
+                            password: pass,
+                            name: name,
+                            isAdmin: role == UserRole.admin,
+                            course: course,
+                            department: dept,
+                            createdBy: 'admin@seait.edu',
+                          );
+                          Navigator.pop(ctx);
+                          // Success banner
+                          final messenger = ScaffoldMessenger.of(context);
+                          messenger.clearMaterialBanners();
+                          messenger.showMaterialBanner(
+                            const MaterialBanner(
+                              backgroundColor: Color(0xFF16A34A),
+                              elevation: 2,
+                              leading: Icon(Icons.check_circle, color: Colors.white),
+                              content: Text('User created successfully', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                              actions: [SizedBox.shrink()],
+                              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            ),
+                          );
+                          await Future.delayed(const Duration(seconds: 3));
+                          messenger.hideCurrentMaterialBanner();
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed to create user: $e'), backgroundColor: Colors.red),
+                          );
+                        }
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF63C1E3),
@@ -242,7 +318,11 @@ class _UserRow extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     TextButton.icon(
-                      onPressed: () => _showPasswordDialog(context, user),
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Update password in Supabase Authentication'), backgroundColor: Colors.orange),
+                        );
+                      },
                       style: TextButton.styleFrom(foregroundColor: Colors.white),
                       icon: const Icon(Icons.lock_reset, size: 18, color: Colors.white),
                       label: const Text('Password', style: TextStyle(color: Colors.white)),
@@ -250,7 +330,18 @@ class _UserRow extends StatelessWidget {
                     const Spacer(),
                     IconButton(
                       tooltip: user.active ? 'Deactivate' : 'Activate',
-                      onPressed: () => UserService.instance.deactivate(user.id),
+                      onPressed: () async {
+                        try {
+                          await ProfilesRepository.instance.setActive(user.id, !user.active);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(user.active ? 'User deactivated' : 'User activated'), backgroundColor: Colors.green),
+                          );
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed to update status: $e'), backgroundColor: Colors.red),
+                          );
+                        }
+                      },
                       icon: Icon(user.active ? Icons.person_off_outlined : Icons.person_outline, color: Colors.white70),
                     ),
                     IconButton(
@@ -335,8 +426,29 @@ class _UserRow extends StatelessWidget {
                   const SizedBox(width: 8),
                   TextButton(
                     onPressed: () async {
-                      await UserService.instance.delete(userId);
-                      Navigator.pop(ctx);
+                      try {
+                        await AdminRepository.instance.deleteUser(userId);
+                        Navigator.pop(ctx);
+                        final messenger = ScaffoldMessenger.of(context);
+                        messenger.clearMaterialBanners();
+                        messenger.showMaterialBanner(
+                          const MaterialBanner(
+                            backgroundColor: Color(0xFF16A34A),
+                            elevation: 2,
+                            leading: Icon(Icons.check_circle, color: Colors.white),
+                            content: Text('User deleted', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                            actions: [SizedBox.shrink()],
+                            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          ),
+                        );
+                        await Future.delayed(const Duration(seconds: 3));
+                        messenger.hideCurrentMaterialBanner();
+                      } catch (e) {
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Failed to delete: $e'), backgroundColor: Colors.red),
+                        );
+                      }
                     },
                     child: const Text('Delete', style: TextStyle(color: Colors.redAccent)),
                   ),
@@ -375,10 +487,9 @@ class _UserRow extends StatelessWidget {
                   const SizedBox(width: 8),
                   ElevatedButton(
                     onPressed: () async {
-                      await UserService.instance.updatePassword(user.id, passCtrl.text);
                       Navigator.pop(ctx);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Password updated (mock)'), backgroundColor: Colors.green),
+                        const SnackBar(content: Text('Update password in Supabase Authentication'), backgroundColor: Colors.orange),
                       );
                     },
                     style: ElevatedButton.styleFrom(
@@ -431,13 +542,34 @@ class _UserRow extends StatelessWidget {
                     const SizedBox(width: 8),
                     ElevatedButton(
                       onPressed: () async {
-                        await UserService.instance.updateName(user.id, nameCtrl.text.trim());
-                        await UserService.instance.updateCourse(
-                          user.id,
-                          course: courseCtrl.text.trim().isEmpty ? null : courseCtrl.text.trim(),
-                          department: deptCtrl.text.trim().isEmpty ? null : deptCtrl.text.trim(),
-                        );
-                        Navigator.pop(ctx);
+                        try {
+                          await ProfilesRepository.instance.updateFields(
+                            user.id,
+                            name: nameCtrl.text.trim(),
+                            course: courseCtrl.text.trim().isEmpty ? null : courseCtrl.text.trim(),
+                            department: deptCtrl.text.trim().isEmpty ? null : deptCtrl.text.trim(),
+                          );
+                          Navigator.pop(ctx);
+                          // Success banner
+                          final messenger = ScaffoldMessenger.of(context);
+                          messenger.clearMaterialBanners();
+                          messenger.showMaterialBanner(
+                            const MaterialBanner(
+                              backgroundColor: Color(0xFF16A34A),
+                              elevation: 2,
+                              leading: Icon(Icons.check_circle, color: Colors.white),
+                              content: Text('Profile updated', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                              actions: [SizedBox.shrink()],
+                              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            ),
+                          );
+                          await Future.delayed(const Duration(seconds: 3));
+                          messenger.hideCurrentMaterialBanner();
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed to save: $e'), backgroundColor: Colors.red),
+                          );
+                        }
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF63C1E3),
