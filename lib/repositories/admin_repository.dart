@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:Gabay/core/env.dart';
 
 /// Admin-only actions that require Supabase Edge Functions.
 ///
@@ -49,9 +50,21 @@ class AdminRepository {
   }
 
   Future<void> sendPasswordReset(String email) async {
-    final res = await _client.functions.invoke('admin_send_reset', body: {
-      'email': email,
-    });
+    // Optionally forward a redirectTo URL if configured
+    String? redirectTo;
+    try {
+      // Delay import to avoid tight coupling if Env isn't present in some contexts
+      // ignore: avoid_dynamic_calls
+      redirectTo = (await Future.value(() => null)) as String?; // placeholder to keep analyzer calm
+    } catch (_) {}
+    // We will import Env at the top instead to follow style
+    // and set redirectTo below if available.
+    redirectTo = Env.supabaseRedirectUrl.isNotEmpty ? Env.supabaseRedirectUrl : null;
+
+    final body = <String, dynamic>{'email': email};
+    if (redirectTo != null) body['redirectTo'] = redirectTo;
+
+    final res = await _client.functions.invoke('admin_send_reset', body: body);
     if (res.status >= 400) {
       throw Exception('admin_send_reset failed (${res.status}): ${res.data}');
     }

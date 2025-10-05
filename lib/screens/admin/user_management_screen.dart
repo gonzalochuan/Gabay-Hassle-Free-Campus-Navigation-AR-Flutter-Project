@@ -281,12 +281,23 @@ class _UserRow extends StatelessWidget {
                     Expanded(
                       child: Text(
                         user.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16),
                       ),
                     ),
-                    _statusChip(user),
                     const SizedBox(width: 6),
-                    _roleChip(user),
+                    Flexible(
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        alignment: WrapAlignment.end,
+                        children: [
+                          _statusChip(user),
+                          _roleChip(user),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 4),
@@ -308,7 +319,9 @@ class _UserRow extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 8),
-                Row(
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
                   children: [
                     TextButton.icon(
                       onPressed: () => _showEditDialog(context, user),
@@ -316,18 +329,23 @@ class _UserRow extends StatelessWidget {
                       icon: const Icon(Icons.edit, size: 18, color: Colors.white),
                       label: const Text('Edit', style: TextStyle(color: Colors.white)),
                     ),
-                    const SizedBox(width: 6),
                     TextButton.icon(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Update password in Supabase Authentication'), backgroundColor: Colors.orange),
-                        );
+                      onPressed: () async {
+                        try {
+                          await AdminRepository.instance.sendPasswordReset(user.email);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Password reset email sent'), backgroundColor: Colors.green),
+                          );
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed to send reset: $e'), backgroundColor: Colors.red),
+                          );
+                        }
                       },
                       style: TextButton.styleFrom(foregroundColor: Colors.white),
                       icon: const Icon(Icons.lock_reset, size: 18, color: Colors.white),
                       label: const Text('Password', style: TextStyle(color: Colors.white)),
                     ),
-                    const Spacer(),
                     IconButton(
                       tooltip: user.active ? 'Deactivate' : 'Activate',
                       onPressed: () async {
@@ -427,7 +445,10 @@ class _UserRow extends StatelessWidget {
                   TextButton(
                     onPressed: () async {
                       try {
+                        // First attempt to delete the auth user via Edge Function
                         await AdminRepository.instance.deleteUser(userId);
+                        // Then delete the profile row to keep tables in sync
+                        await ProfilesRepository.instance.deleteProfile(userId);
                         Navigator.pop(ctx);
                         final messenger = ScaffoldMessenger.of(context);
                         messenger.clearMaterialBanners();
@@ -444,10 +465,30 @@ class _UserRow extends StatelessWidget {
                         await Future.delayed(const Duration(seconds: 3));
                         messenger.hideCurrentMaterialBanner();
                       } catch (e) {
-                        Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Failed to delete: $e'), backgroundColor: Colors.red),
-                        );
+                        // If the admin function is missing (404), fall back to deleting profile only
+                        final msg = e.toString();
+                        if (msg.contains('404') || msg.contains('NOT_FOUND')) {
+                          try {
+                            await ProfilesRepository.instance.deleteProfile(userId);
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Auth delete function missing. Profile row removed only.'),
+                                backgroundColor: Colors.orange,
+                              ),
+                            );
+                          } catch (e2) {
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Failed to delete profile: $e2'), backgroundColor: Colors.red),
+                            );
+                          }
+                        } else {
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed to delete: $e'), backgroundColor: Colors.red),
+                          );
+                        }
                       }
                     },
                     child: const Text('Delete', style: TextStyle(color: Colors.redAccent)),
