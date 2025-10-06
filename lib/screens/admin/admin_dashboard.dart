@@ -21,6 +21,31 @@ class AdminDashboard extends StatefulWidget {
   State<AdminDashboard> createState() => _AdminDashboardState();
 }
 
+class _SelectableChip extends StatelessWidget {
+  const _SelectableChip({required this.label, required this.selected, required this.onTap});
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final bg = selected ? const Color(0xFF63C1E3).withOpacity(0.9) : Colors.white.withOpacity(0.10);
+    final fg = selected ? Colors.white : Colors.white.withOpacity(0.85);
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withOpacity(0.16)),
+        ),
+        child: Text(label, style: TextStyle(color: fg, fontWeight: FontWeight.w600, fontSize: 12)),
+      ),
+    );
+  }
+}
+
 class _ActionButton extends StatelessWidget {
   const _ActionButton({required this.icon, required this.label, required this.onTap});
   final IconData icon;
@@ -55,6 +80,11 @@ class _ActionButton extends StatelessWidget {
 class _AdminDashboardState extends State<AdminDashboard> {
   final _titleCtrl = TextEditingController();
   final _bodyCtrl = TextEditingController();
+  // Announcement options
+  String _scope = 'all'; // 'all' or 'building'
+  String? _deptTag; // when scope == 'building'
+  bool _scheduleEnabled = false;
+  DateTime? _scheduledAt;
 
   @override
   void dispose() {
@@ -76,9 +106,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
       type: PostType.announcement,
       title: title,
       body: body.isEmpty ? null : body,
+      deptTag: _scope == 'building' ? (_deptTag?.trim().isEmpty == true ? null : _deptTag?.trim()) : null,
+      scheduledAt: _scheduleEnabled ? _scheduledAt : null,
     );
     _titleCtrl.clear();
     _bodyCtrl.clear();
+    setState(() {
+      _scope = 'all';
+      _deptTag = null;
+      _scheduleEnabled = false;
+      _scheduledAt = null;
+    });
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Announcement published')),
@@ -145,6 +183,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
               _NewsComposerCard(
                 titleCtrl: _titleCtrl,
                 bodyCtrl: _bodyCtrl,
+                scope: _scope,
+                deptTag: _deptTag,
+                scheduleEnabled: _scheduleEnabled,
+                scheduledAt: _scheduledAt,
+                onScopeChanged: (v) => setState(() => _scope = v),
+                onDeptTagChanged: (v) => setState(() => _deptTag = v),
+                onScheduleEnabledChanged: (v) => setState(() => _scheduleEnabled = v),
+                onScheduledAtChanged: (v) => setState(() => _scheduledAt = v),
                 onPublish: _handlePublish,
               ),
               const SizedBox(height: 16),
@@ -286,10 +332,30 @@ class _GlassPanel extends StatelessWidget {
 }
 
 class _NewsComposerCard extends StatelessWidget {
-  const _NewsComposerCard({required this.titleCtrl, required this.bodyCtrl, required this.onPublish});
+  const _NewsComposerCard({
+    required this.titleCtrl,
+    required this.bodyCtrl,
+    required this.onPublish,
+    required this.scope,
+    required this.deptTag,
+    required this.scheduleEnabled,
+    required this.scheduledAt,
+    required this.onScopeChanged,
+    required this.onDeptTagChanged,
+    required this.onScheduleEnabledChanged,
+    required this.onScheduledAtChanged,
+  });
   final TextEditingController titleCtrl;
   final TextEditingController bodyCtrl;
   final VoidCallback onPublish;
+  final String scope;
+  final String? deptTag;
+  final bool scheduleEnabled;
+  final DateTime? scheduledAt;
+  final ValueChanged<String> onScopeChanged;
+  final ValueChanged<String?> onDeptTagChanged;
+  final ValueChanged<bool> onScheduleEnabledChanged;
+  final ValueChanged<DateTime?> onScheduledAtChanged;
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -324,21 +390,108 @@ class _NewsComposerCard extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        Row(
+        // Scope & schedule controls
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: [
-            Expanded(
-              child: _ChipButton(label: 'All Campus'),
+            _SelectableChip(
+              label: 'All Campus',
+              selected: scope == 'all',
+              onTap: () => onScopeChanged('all'),
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _ChipButton(label: 'By Building'),
+            _SelectableChip(
+              label: 'By Building',
+              selected: scope == 'building',
+              onTap: () => onScopeChanged('building'),
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _ChipButton(label: 'Schedule'),
+            _SelectableChip(
+              label: 'Schedule',
+              selected: scheduleEnabled,
+              onTap: () => onScheduleEnabledChanged(!scheduleEnabled),
             ),
           ],
         ),
+        if (scope == 'building') ...[
+          const SizedBox(height: 10),
+          TextField(
+            controller: TextEditingController(text: deptTag ?? ''),
+            onChanged: onDeptTagChanged,
+            style: const TextStyle(color: Colors.white),
+            cursorColor: Colors.white,
+            decoration: InputDecoration(
+              hintText: 'Building/Department tag (e.g., MST, Registrar)',
+              hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
+              filled: true,
+              fillColor: Colors.white.withOpacity(0.08),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            ),
+          ),
+        ],
+        if (scheduleEnabled) ...[
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(
+              child: Text(
+                scheduledAt == null
+                    ? 'No schedule set'
+                    : 'Scheduled: '
+                      '${scheduledAt!.toLocal().toString().substring(0, 16)}',
+                style: const TextStyle(color: Colors.white70),
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: () async {
+                final now = DateTime.now();
+                final date = await showDatePicker(
+                  context: context,
+                  initialDate: now,
+                  firstDate: now.subtract(const Duration(days: 0)),
+                  lastDate: now.add(const Duration(days: 365)),
+                  builder: (ctx, child) => Theme(
+                    data: Theme.of(ctx).copyWith(
+                      colorScheme: const ColorScheme.dark(
+                        primary: Color(0xFF63C1E3),
+                        surface: Color(0xFF1E2931),
+                        onSurface: Colors.white,
+                      ),
+                    ),
+                    child: child!,
+                  ),
+                );
+                if (date == null) return;
+                final time = await showTimePicker(
+                  context: context,
+                  initialTime: TimeOfDay.now(),
+                  builder: (ctx, child) => Theme(
+                    data: Theme.of(ctx).copyWith(
+                      timePickerTheme: const TimePickerThemeData(
+                        backgroundColor: Color(0xFF1E2931),
+                      ),
+                      colorScheme: const ColorScheme.dark(
+                        primary: Color(0xFF63C1E3),
+                        surface: Color(0xFF1E2931),
+                        onSurface: Colors.white,
+                      ),
+                    ),
+                    child: child!,
+                  ),
+                );
+                if (time == null) return;
+                final dt = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+                onScheduledAtChanged(dt.toUtc());
+              },
+              icon: const Icon(Icons.schedule),
+              label: const Text('Pick time'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF63C1E3),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ]),
+        ],
         const SizedBox(height: 12),
         Align(
           alignment: Alignment.centerRight,
@@ -755,12 +908,12 @@ class _RoomsSchedulesPanel extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text('${r.name} • ${r.code} • ${r.building}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                              Text('QR: ${r.qrCode}  |  Cap: ${r.capacity}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                              Text('QR: ${r.qrCode}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
                             ],
                           ),
                         ),
                         TextButton(
-                          onPressed: () => _showTodaySchedule(context, r.qrCode),
+                          onPressed: () => _showTodaySchedule(context, r.code),
                           child: const Text('Today'),
                         ),
                       ],

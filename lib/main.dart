@@ -9,12 +9,15 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/env.dart';
 import 'repositories/auth_repository.dart';
 import 'repositories/profiles_repository.dart';
+import 'services/room_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
   if (Env.isConfigured) {
     await Supabase.initialize(url: Env.supabaseUrl, anonKey: Env.supabaseAnonKey);
+    // Initialize RoomService to load rooms from Supabase
+    await RoomService.instance.initialize();
   }
   runApp(const MyApp());
 }

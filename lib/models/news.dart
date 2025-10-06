@@ -45,4 +45,47 @@ class NewsPost {
       pinned: pinned ?? this.pinned,
     );
   }
+
+  // Serialization helpers (snake_case keys to match Supabase)
+  factory NewsPost.fromMap(Map<String, dynamic> map) {
+    return NewsPost(
+      id: map['id'] as String,
+      type: _postTypeFromString(map['type'] as String?),
+      title: map['title'] as String,
+      body: map['body'] as String?,
+      deptTag: map['dept_tag'] as String?,
+      createdAt: DateTime.parse((map['created_at'] ?? map['createdAt']) as String),
+      scheduledAt: map['scheduled_at'] != null ? DateTime.parse(map['scheduled_at'] as String) : null,
+      pinned: (map['pinned'] as bool?) ?? false,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'type': type.name,
+      'title': title,
+      'body': body,
+      'dept_tag': deptTag,
+      'created_at': createdAt.toIso8601String(),
+      'scheduled_at': scheduledAt?.toIso8601String(),
+      'pinned': pinned,
+    };
+  }
+}
+
+PostType _postTypeFromString(String? s) {
+  switch (s) {
+    case 'announcement':
+      return PostType.announcement;
+    case 'event':
+      return PostType.event;
+    case 'alert':
+      return PostType.alert;
+    case 'lostFound':
+    case 'lost_found':
+      return PostType.lostFound;
+    default:
+      return PostType.announcement;
+  }
 }

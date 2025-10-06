@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -43,15 +44,24 @@ class _RoomScannerScreenState extends State<RoomScannerScreen> {
 
     setState(() => _locked = true);
 
-    final room = RoomService.instance.findByQr(value);
+    // Try cached rooms first, then fallback to an on-demand fetch
+    Room? room = RoomService.instance.findByQr(value);
     if (room == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Room not found for this QR'), backgroundColor: Colors.red),
-        );
+      try {
+        await RoomService.instance.listAll();
+        room = RoomService.instance.findByQr(value);
+      } catch (_) {
+        // ignore and handle as not found below
       }
-      setState(() => _locked = false);
-      return;
+      if (room == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Room not found for this QR'), backgroundColor: Colors.red),
+          );
+        }
+        setState(() => _locked = false);
+        return;
+      }
     }
 
     // Fetch today's schedule using room.code (matches ScheduleService mock data)
@@ -85,9 +95,13 @@ class _RoomScannerScreenState extends State<RoomScannerScreen> {
         elevation: 0,
       ),
       body: Stack(
+        fit: StackFit.expand,
         children: [
           const _Background(),
-          if (_room == null) _buildScanner() else _buildResult(),
+          if (_room == null)
+            _buildScanner()
+          else
+            SafeArea(child: _buildResult()),
         ],
       ),
     );
@@ -103,7 +117,7 @@ class _RoomScannerScreenState extends State<RoomScannerScreen> {
           ),
         ),
         Positioned(
-          bottom: 40,
+          bottom: 16 + (MediaQuery.of(context).padding.bottom),
           left: 0,
           right: 0,
           child: Column(
@@ -141,29 +155,39 @@ class _RoomScannerScreenState extends State<RoomScannerScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withOpacity(0.2)),
-            ),
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: BackdropFilter(
+              filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(color: Colors.white.withOpacity(0.25), width: 1),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.20),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                 Text(
                   _room!.name,
                   style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '${_room!.code} • ${_room!.building}',
+                  '${_room!.code}'
+                  '${_room!.building != null ? ' • ${_room!.building}' : ''}'
+                  '${_room!.deptTag != null ? ' • ${_room!.deptTag}' : ''}',
                   style: const TextStyle(color: Colors.white70),
                 ),
-                if (_room!.capacity != null) ...[
-                  const SizedBox(height: 6),
-                  Text('Capacity: ${_room!.capacity}', style: const TextStyle(color: Colors.white70)),
-                ],
+                // Capacity removed (no capacity in Room spec)
                 const SizedBox(height: 12),
                 const Text("Today's Schedule", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 6),
@@ -173,31 +197,37 @@ class _RoomScannerScreenState extends State<RoomScannerScreen> {
                   Column(
                     children: [
                       for (final e in _today)
-                        Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.06),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.white.withOpacity(0.18)),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.schedule, color: Colors.white70, size: 16),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('${_fmt(e.start)} - ${_fmt(e.end)}', style: const TextStyle(color: Colors.white70)),
-                                    const SizedBox(height: 2),
-                                    Text(e.title, style: const TextStyle(color: Colors.white)),
-                                    const SizedBox(height: 2),
-                                    Text(e.instructor, style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                                  ],
-                                ),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(18),
+                          child: BackdropFilter(
+                            filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.10),
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(color: Colors.white.withOpacity(0.16)),
                               ),
-                            ],
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.schedule, color: Colors.white70, size: 16),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('${_fmt(e.start)} - ${_fmt(e.end)}', style: const TextStyle(color: Colors.white70)),
+                                        const SizedBox(height: 2),
+                                        Text(e.title, style: const TextStyle(color: Colors.white)),
+                                        const SizedBox(height: 2),
+                                        Text(e.instructor, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                     ],
@@ -205,6 +235,8 @@ class _RoomScannerScreenState extends State<RoomScannerScreen> {
               ],
             ),
           ),
+        ),
+      ),
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: _reset,
@@ -227,14 +259,23 @@ class _Background extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF1E3A8A), Color(0xFF1E40AF), Color(0xFF1E4ED8)],
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF63C1E3), Color(0xFF1E2931)],
+            ),
+          ),
         ),
-      ),
+        BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 2, sigmaY: 2),
+          child: Container(color: Colors.black.withOpacity(0)),
+        ),
+      ],
     );
   }
 }

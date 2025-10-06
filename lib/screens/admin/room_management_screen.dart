@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -9,6 +10,35 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../../models/room.dart';
 import '../../services/room_service.dart';
+
+class LifecycleEventHandler extends WidgetsBindingObserver {
+  final AsyncCallback? resumeCallBack;
+  final AsyncCallback? suspendingCallBack;
+
+  LifecycleEventHandler({
+    this.resumeCallBack,
+    this.suspendingCallBack,
+  });
+
+  @override
+  Future<void> didChangeAppLifecycleState(AppLifecycleState state) async {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        if (resumeCallBack != null) {
+          await resumeCallBack!();
+        }
+        break;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
+        if (suspendingCallBack != null) {
+          await suspendingCallBack!();
+        }
+        break;
+    }
+  }
+}
 
 class RoomManagementScreen extends StatefulWidget {
   const RoomManagementScreen({super.key});
@@ -26,6 +56,67 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
   
   Room? _editingRoom;
   bool _isGeneratingQR = false;
+  bool _isLoading = true;
+  bool _isSaving = false;
+  String? _errorMessage;
+  StreamSubscription<List<Room>>? _roomsSubscription;
+  List<Room> _rooms = [];
+  
+  @override
+  void initState() {
+    super.initState();
+    print('Initializing RoomManagementScreen');
+    _setupRoomsSubscription();
+    _setupAppLifecycleListener();
+  }
+  
+  void _setupRoomsSubscription() {
+    print('Setting up room subscription');
+    
+    // Cancel existing subscription if any
+    _roomsSubscription?.cancel();
+    
+    _roomsSubscription = RoomService().streamAll().listen(
+      (rooms) {
+        print('Received ${rooms.length} rooms in subscription');
+        if (mounted) {
+          setState(() {
+            _rooms = rooms;
+            _isLoading = false;
+            _errorMessage = null;
+            print('Updated UI with ${_rooms.length} rooms');
+          });
+        }
+      },
+      onError: (error) {
+        print('Error in room subscription: $error');
+        if (mounted) {
+          setState(() {
+            _errorMessage = 'Error loading rooms: $error';
+            _isLoading = false;
+          });
+        }
+      },
+      onDone: () => print('Room subscription closed'),
+      cancelOnError: false,
+    );
+    
+    // Force initial load
+    _refreshRooms();
+  }
+  
+  // Removed broken _initializeRoomService (malformed braces). Initialization is handled by RoomService().streamAll() and _refreshRooms().
+
+  void _setupAppLifecycleListener() {
+    WidgetsBinding.instance.addObserver(
+      LifecycleEventHandler(
+        resumeCallBack: () async {
+          print('App resumed - refreshing rooms');
+          await _refreshRooms();
+        },
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -33,7 +124,81 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
     _nameController.dispose();
     _buildingController.dispose();
     _deptController.dispose();
+    _roomsSubscription?.cancel();
     super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0F1A20),
+      appBar: AppBar(
+        title: const Text('Room Management'),
+        backgroundColor: const Color(0xFF1E2931),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _refreshRooms,
+            tooltip: 'Refresh',
+          ),
+        ],
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _errorMessage != null
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        _errorMessage!,
+                        style: const TextStyle(color: Colors.red),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _refreshRooms,
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                )
+              : _rooms.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.meeting_room_outlined,
+                            size: 64,
+                            color: Colors.grey,
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'No rooms added yet',
+                            style: TextStyle(color: Colors.grey, fontSize: 18),
+                          ),
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: _showAddRoomDialog,
+                            child: const Text('Add Your First Room'),
+                          ),
+                        ],
+                      ),
+                    )
+                  : RefreshIndicator(
+                      onRefresh: _refreshRooms,
+                      child: ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: _rooms.length,
+                        itemBuilder: (context, index) => _buildRoomCard(_rooms[index]),
+                      ),
+                    ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showAddRoomDialog,
+        backgroundColor: const Color(0xFF63C1E3),
+        child: const Icon(Icons.add, color: Colors.white),
+      ),
+    );
   }
 
   void _startEditing(Room room) {
@@ -140,34 +305,12 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () async {
-              if (_formKey.currentState!.validate()) {
-                final room = Room(
-                  id: _editingRoom?.id ?? const Uuid().v4(),
-                  qrCode: 'ROOM_${_codeController.text.toUpperCase()}_${const Uuid().v4().substring(0, 6)}',
-                  code: _codeController.text.toUpperCase(),
-                  name: _nameController.text,
-                  building: _buildingController.text,
-                  deptTag: _deptController.text.isEmpty ? null : _deptController.text,
-                );
-
-                if (isEditing) {
-                  await RoomService.instance.update(room);
-                } else {
-                  await RoomService.instance.create(room);
-                }
-
-                if (mounted) {
-                  Navigator.pop(ctx);
-                  _clearForm();
-                }
-              }
-            },
+            onPressed: _saveRoom,
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF63C1E3),
               foregroundColor: Colors.white,
             ),
-            child: Text(isEditing ? 'Update' : 'Add'),
+            child: Text(_editingRoom != null ? 'Update' : 'Add'),
           ),
         ],
       ),
@@ -180,6 +323,47 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
     _nameController.clear();
     _buildingController.clear();
     _deptController.clear();
+  }
+
+  Future<void> _saveRoom() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      final room = Room(
+        id: const Uuid().v4(),
+        qrCode: 'ROOM_${_codeController.text.toUpperCase()}_${const Uuid().v4().substring(0, 6)}',
+        code: _codeController.text.trim().toUpperCase(),
+        name: _nameController.text.trim(),
+        building: _buildingController.text.trim().isNotEmpty ? _buildingController.text.trim() : null,
+        deptTag: _deptController.text.trim().isNotEmpty ? _deptController.text.trim() : null,
+      );
+
+      await RoomService().create(room);
+      
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Room saved successfully')),
+        );
+      }
+    } catch (e) {
+      print('Error saving room: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving room: ${e.toString()}')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
   }
 
   Future<void> _saveQRCode(Room room) async {
@@ -229,192 +413,107 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Scaffold(
-      backgroundColor: const Color(0xFF1E2931),
-      body: Stack(
-        children: [
-          // Background
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFF63C1E3), Color(0xFF1E2931)],
-              ),
-            ),
-          ),
-
-          // Content
-          SafeArea(
-            child: Column(
-              children: [
-                // Header
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Room Management',
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.add, color: Colors.white),
-                        onPressed: () {
-                          _editingRoom = null;
-                          _codeController.clear();
-                          _nameController.clear();
-                          _buildingController.clear();
-                          _deptController.clear();
-                          _showEditDialog();
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Room List
-                Expanded(
-                  child: StreamBuilder<List<Room>>(
-                    stream: RoomService.instance.list(),
-                    builder: (context, snapshot) {
-                      final rooms = snapshot.data ?? [];
-                      if (rooms.isEmpty) {
-                        return Center(
-                          child: Text(
-                            'No rooms added yet.\nTap + to add a new room.',
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.bodyLarge?.copyWith(
-                              color: Colors.white70,
-                            ),
-                          ),
-                        );
-                      }
-
-                      return ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                        itemCount: rooms.length,
-                        itemBuilder: (ctx, index) {
-                          final room = rooms[index];
-                          return _buildRoomCard(room);
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildRoomCard(Room room) {
     final theme = Theme.of(context);
     
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      color: Colors.white.withOpacity(0.1),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.white.withOpacity(0.1)),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () {
-          // Show room details or schedule
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF63C1E3).withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.meeting_room, color: Color(0xFF63C1E3)),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: InkWell(
+            onTap: () {},
+            child: Container(
+              padding: const EdgeInsets.all(12.0),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white.withOpacity(0.18)),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${room.code} - ${room.name}',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF63C1E3).withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${room.building}${room.deptTag != null ? ' • ${room.deptTag}' : ''}',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: Colors.white70,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert, color: Colors.white70),
-                onSelected: (value) {
-                  switch (value) {
-                    case 'edit':
-                      _startEditing(room);
-                      break;
-                    case 'delete':
-                      _confirmDelete(room.id);
-                      break;
-                    case 'qr':
-                      _showQRCodeDialog(room);
-                      break;
-                  }
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'edit',
-                    child: Row(
+                    child: const Icon(Icons.meeting_room, color: Color(0xFF63C1E3)),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.edit, size: 20, color: Colors.blue),
-                        SizedBox(width: 8),
-                        Text('Edit Room'),
+                        Text(
+                          '${room.code} - ${room.name}',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${room.building ?? ''}${room.deptTag != null ? ' • ${room.deptTag}' : ''}',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: Colors.white70,
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                  const PopupMenuItem(
-                    value: 'qr',
-                    child: Row(
-                      children: [
-                        Icon(Icons.qr_code, size: 20, color: Colors.green),
-                        SizedBox(width: 8),
-                        Text('Show QR Code'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'delete',
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete, size: 20, color: Colors.red),
-                        SizedBox(width: 8),
-                        Text('Delete Room'),
-                      ],
-                    ),
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert, color: Colors.white70),
+                    onSelected: (value) {
+                      switch (value) {
+                        case 'edit':
+                          _startEditing(room);
+                          break;
+                        case 'delete':
+                          _confirmDelete(room.id);
+                          break;
+                        case 'qr':
+                          _showQRCodeDialog(room);
+                          break;
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit, size: 20, color: Colors.blue),
+                            SizedBox(width: 8),
+                            Text('Edit Room'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'qr',
+                        child: Row(
+                          children: [
+                            Icon(Icons.qr_code, size: 20, color: Colors.green),
+                            SizedBox(width: 8),
+                            Text('Show QR Code'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete, size: 20, color: Colors.red),
+                            SizedBox(width: 8),
+                            Text('Delete Room'),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -526,11 +625,46 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
     );
   }
 
-  void _startEditing(Room room) {
-    // Implement editing functionality here
+  // Removed duplicate _saveQRCode definition
+  
+  Future<void> _refreshRooms() async {
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
+    
+    try {
+      print('Refreshing rooms...');
+      // Force a fresh fetch from the database
+      final rooms = await RoomService().listAll();
+      if (mounted) {
+        setState(() {
+          _rooms = rooms;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error refreshing rooms: $e');
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Failed to load rooms. Please try again.';
+          _isLoading = false;
+        });
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to refresh rooms: $e')),
+      );
+    }
   }
 
-  void _saveQRCode(Room room) {
-    // Implement QR code saving functionality here
+  void _showAddRoomDialog() {
+    _editingRoom = null;
+    _codeController.clear();
+    _nameController.clear();
+    _buildingController.clear();
+    _deptController.clear();  
+    _showEditDialog();
   }
 }

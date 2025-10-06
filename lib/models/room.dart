@@ -34,6 +34,49 @@ class Room {
         ),
       );
       
+  // Convert Room to JSON
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'qrCode': qrCode,
+      'code': code,
+      'name': name,
+      'building': building,
+      'capacity': capacity,
+      'deptTag': deptTag,
+      'qrImagePath': qrImagePath,
+    };
+  }
+
+  // Create Room from JSON
+  factory Room.fromJson(Map<String, dynamic> json) {
+    try {
+      // Handle both camelCase and snake_case from different sources
+      final id = json['id'] as String? ?? const Uuid().v4();
+      final qrCode = (json['qr_code'] ?? json['qrCode']) as String? ?? '';
+      final code = (json['code'] ?? '') as String;
+      final name = (json['name'] ?? 'Unnamed Room') as String;
+      final building = json['building'] as String?;
+      final capacity = json['capacity'] as int?;
+      final deptTag = (json['dept_tag'] ?? json['deptTag']) as String?;
+      final qrImagePath = json['qrImagePath'] as String?;
+      
+      return Room(
+        id: id,
+        qrCode: qrCode,
+        code: code,
+        name: name,
+        building: building,
+        capacity: capacity,
+        deptTag: deptTag,
+        qrImagePath: qrImagePath,
+      );
+    } catch (e) {
+      print('Error parsing Room from JSON: $e');
+      rethrow;
+    }
+  }
+
   // Generate QR code as image data (for saving)
   Future<Uint8List> generateQrImage() async {
     try {
@@ -61,7 +104,7 @@ class Room {
     }
   }
 
-  const Room({
+  Room({
     required this.id,
     required this.qrCode,
     required this.code,
@@ -70,10 +113,14 @@ class Room {
     this.capacity,
     this.deptTag,
     this.qrImagePath,
-  }) : assert(id != null),
-       assert(qrCode != null),
-       assert(code != null),
-       assert(name != null);
+  }) : assert(id.isNotEmpty, 'ID cannot be empty'),
+       assert(code.isNotEmpty, 'Room code cannot be empty'),
+       assert(name.isNotEmpty, 'Room name cannot be empty') {
+    assert(() {
+      print('Creating Room: ${toJson()}');
+      return true;
+    }());
+  }
   
   Room copyWith({
     String? id,
