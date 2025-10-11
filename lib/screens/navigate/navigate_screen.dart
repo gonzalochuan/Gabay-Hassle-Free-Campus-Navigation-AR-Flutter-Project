@@ -1,9 +1,13 @@
 import 'dart:ui';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../widgets/glass_container.dart';
 import 'ar_navigate_view.dart';
+import 'qr_start_screen.dart';
+import 'package:vector_math/vector_math_64.dart' as vm;
+import '../../navigation/qr_marker_service.dart';
 
 class NavigateScreen extends StatefulWidget {
   const NavigateScreen({super.key});
@@ -64,6 +68,61 @@ class _NavigateScreenState extends State<NavigateScreen> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ARNavigateView(destinationCode: room),
+      ),
+    );
+  }
+
+  Future<void> _scanQr() async {
+    final data = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(builder: (_) => const QRStartScreen()),
+    );
+    if (data == null) return;
+
+    String? room;
+    vm.Vector3? origin;
+    double? yawRad;
+    String? markerId;
+
+    if (data.containsKey('room')) {
+      room = data['room'] as String?;
+    }
+    if (data.containsKey('pos')) {
+      final pos = (data['pos'] as List).cast<double>();
+      origin = vm.Vector3(pos[0], pos[1], pos[2]);
+    }
+    if (data.containsKey('yawDeg')) {
+      final deg = data['yawDeg'] as double;
+      yawRad = deg * math.pi / 180.0;
+    }
+    if (data.containsKey('markerId')) {
+      markerId = (data['markerId'] as String).trim();
+    }
+
+    // If a marker ID is present, resolve from backend and merge metadata
+    if (markerId != null && markerId.isNotEmpty) {
+      try {
+        final svc = QrMarkerService();
+        final mk = await svc.fetchBySlug(markerId);
+        if (mk != null) {
+          // Prefer backend metadata when available
+          if (mk.position != null) origin = mk.position;
+          if (mk.yawDeg != null) yawRad = mk.yawDeg! * math.pi / 180.0;
+          if (mk.roomCode != null && (room == null || room!.isEmpty)) room = mk.roomCode;
+        }
+      } catch (_) {}
+    }
+
+    // If only anchor was scanned without room, keep previous selection
+    room ??= _selectedDestination ?? 'CL 1';
+    setState(() => _selectedDestination = room);
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ARNavigateView(
+          destinationCode: room!,
+          initialOrigin: origin,
+          initialYawRad: yawRad,
+        ),
       ),
     );
   }
@@ -194,6 +253,7 @@ class _NavigateScreenState extends State<NavigateScreen> {
               onCategoryChange: (c) => setState(() => _activeCategory = c),
               onSelectRoom: (room) => _startAr(room),
               onOpenPicker: _openDestinationPicker,
+              onScanQr: _scanQr,
               onClearDestination: () => setState(() => _selectedDestination = null),
             ),
           ),
@@ -251,6 +311,7 @@ class _ArMockOverlay extends StatelessWidget {
     required this.onCategoryChange,
     required this.onSelectRoom,
     required this.onOpenPicker,
+    required this.onScanQr,
     required this.onClearDestination,
   });
 
@@ -261,6 +322,7 @@ class _ArMockOverlay extends StatelessWidget {
   final ValueChanged<String> onSelectRoom;
   final VoidCallback onOpenPicker;
   final VoidCallback onClearDestination;
+  final VoidCallback onScanQr;
 
   @override
   Widget build(BuildContext context) {
@@ -294,7 +356,7 @@ class _ArMockOverlay extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Row with Browse and Clear
+                  // Row with Browse, Scan QR and Clear
                   Row(
                     children: [
                       GlassContainer(
@@ -307,6 +369,21 @@ class _ArMockOverlay extends StatelessWidget {
                               Icon(Icons.list, color: Colors.white, size: 16),
                               SizedBox(width: 6),
                               Text('Browse', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GlassContainer(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        child: InkWell(
+                          onTap: onScanQr,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.qr_code_scanner, color: Colors.white, size: 16),
+                              SizedBox(width: 6),
+                              Text('Scan QR', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
                             ],
                           ),
                         ),

@@ -19,7 +19,7 @@ Gabay-Hassle-Free-Campus-Navigation-AR-Flutter-Project
 
 to run this in real phone
 
-flutter run -d NR5SIBRGFAMNU4JF -v
+flutter run -d 10620253BL005996
 
 ## Environment Configuration
 

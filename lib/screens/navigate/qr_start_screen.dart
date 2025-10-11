@@ -15,6 +15,47 @@ class _QRStartScreenState extends State<QRStartScreen> {
     raw = raw.trim();
     if (raw.isEmpty) return null;
 
+    // URL format support: .../n?id=<slug>&heading=<deg>
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      try {
+        final uri = Uri.parse(raw);
+        final id = uri.queryParameters['id'];
+        final headingStr = uri.queryParameters['heading'];
+        final map = <String, dynamic>{};
+        if (id != null && id.isNotEmpty) map['markerId'] = id;
+        if (headingStr != null) {
+          final hd = double.tryParse(headingStr);
+          if (hd != null) map['yawDeg'] = hd;
+        }
+        if (map.isNotEmpty) return map;
+      } catch (_) {}
+    }
+
+    // MARKER_ID:START_A
+    if (raw.toUpperCase().contains('MARKER_ID:')) {
+      final m = RegExp(r'MARKER_ID:([^;\n]+)', caseSensitive: false).firstMatch(raw);
+      if (m != null) {
+        final id = m.group(1)!.trim();
+        final map = <String, dynamic>{'markerId': id};
+        // Optional inline HEADING and POS on the same QR
+        final headingM = RegExp(r'HEADING:([^;\n]+)', caseSensitive: false).firstMatch(raw);
+        if (headingM != null) {
+          final v = double.tryParse(headingM.group(1)!.trim());
+          if (v != null) map['yawDeg'] = v;
+        }
+        final posM = RegExp(r'POS:([^;\n]+)', caseSensitive: false).firstMatch(raw);
+        if (posM != null) {
+          final parts = posM.group(1)!.split(',').map((e) => double.tryParse(e.trim())).toList();
+          if (parts.length == 3 && !parts.any((e) => e == null)) {
+            map['pos'] = [parts[0]!, parts[1]!, parts[2]!];
+          }
+        }
+        final roomM = RegExp(r'ROOM:([^;\n]+)', caseSensitive: false).firstMatch(raw);
+        if (roomM != null) map['room'] = roomM.group(1)!.trim();
+        return map;
+      }
+    }
+
     // ROOM:CL 1
     if (raw.toUpperCase().startsWith('ROOM:')) {
       final room = raw.substring(5).trim();

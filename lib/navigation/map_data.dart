@@ -19,3 +19,16 @@ final Map<String, String> kRoomToWaypoint = {
 String getStartWaypointForCurrentArea() {
   return 'W_START';
 }
+
+String findNearestWaypointId(vm.Vector3 p, Map<String, Waypoint> waypoints) {
+  String? bestId;
+  double bestD = double.infinity;
+  for (final entry in waypoints.entries) {
+    final d = (entry.value.pos - p).length;
+    if (d < bestD) {
+      bestD = d;
+      bestId = entry.key;
+    }
+  }
+  return bestId ?? 'W_START';
+}
