@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../widgets/glass_container.dart';
+import 'ar_navigate_view.dart';
 
 class NavigateScreen extends StatefulWidget {
   const NavigateScreen({super.key});
@@ -56,6 +57,15 @@ class _NavigateScreenState extends State<NavigateScreen> {
   void dispose() {
     _cameraController.dispose();
     super.dispose();
+  }
+
+  void _startAr(String room) {
+    setState(() => _selectedDestination = room);
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ARNavigateView(destinationCode: room),
+      ),
+    );
   }
 
   void _openDestinationPicker() async {
@@ -145,6 +155,13 @@ class _NavigateScreenState extends State<NavigateScreen> {
         _selectedDestination = selected;
         _activeCategory = _mockCategories.entries.firstWhere((e) => e.value.contains(selected)).key;
       });
+      if (mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ARNavigateView(destinationCode: selected),
+          ),
+        );
+      }
     }
   }
 
@@ -175,7 +192,7 @@ class _NavigateScreenState extends State<NavigateScreen> {
               categories: _mockCategories,
               activeCategory: _activeCategory,
               onCategoryChange: (c) => setState(() => _activeCategory = c),
-              onSelectRoom: (room) => setState(() => _selectedDestination = room),
+              onSelectRoom: (room) => _startAr(room),
               onOpenPicker: _openDestinationPicker,
               onClearDestination: () => setState(() => _selectedDestination = null),
             ),

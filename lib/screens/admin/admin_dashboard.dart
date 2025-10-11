@@ -12,6 +12,7 @@ import '../../models/user.dart';
 import '../../services/room_service.dart';
 import '../../services/schedule_service.dart';
 import 'user_management_screen.dart';
+import 'booking_management_screen.dart';
 import '../room_scanner/room_scanner_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
@@ -211,6 +212,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => const UserManagementScreen(),
+                    ),
+                  );
+                },
+              ),
+              const Divider(color: Colors.white24, height: 32),
+              _ActionButton(
+                icon: Icons.event_available,
+                label: 'Booking Management',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const BookingManagementScreen(),
                     ),
                   );
                 },

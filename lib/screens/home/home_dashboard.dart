@@ -6,6 +6,8 @@ import 'package:Gabay/models/user.dart';
 import 'package:Gabay/repositories/auth_repository.dart';
 import 'package:Gabay/repositories/profiles_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/booking_service.dart';
+import '../../models/booking.dart';
 import '../navigate/navigate_screen.dart';
 import '../room_scanner/room_scanner_screen.dart';
 import '../news/news_feed_screen.dart';
@@ -370,6 +372,47 @@ class _HeaderCardState extends State<_HeaderCard> {
                     children: [
                       if (courseStr.isNotEmpty) _profileChip(Icons.school_outlined, 'Course: ' + courseStr),
                       _profileChip(Icons.badge_outlined, 'Role: ' + (isAdmin ? 'admin' : 'user')),
+                      StreamBuilder<List<Booking>>(
+                        stream: BookingService.instance.streamMine(),
+                        builder: (context, snapshot) {
+                          final list = snapshot.data ?? const <Booking>[];
+                          if (list.isEmpty) return const SizedBox.shrink();
+                          // Get the latest by createdAt
+                          final latest = list.reduce((a, b) => a.createdAt.isAfter(b.createdAt) ? a : b);
+                          final status = latest.status.toLowerCase();
+                          IconData icon;
+                          Color statusColor;
+                          switch (status) {
+                            case 'approved':
+                              icon = Icons.check_circle;
+                              statusColor = Colors.lightGreenAccent;
+                              break;
+                            case 'declined':
+                              icon = Icons.cancel;
+                              statusColor = Colors.redAccent;
+                              break;
+                            default:
+                              icon = Icons.hourglass_bottom;
+                              statusColor = Colors.amber;
+                          }
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: statusColor.withOpacity(0.18),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(color: statusColor.withOpacity(0.6)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(icon, color: statusColor, size: 16),
+                                const SizedBox(width: 6),
+                                Text('Booking: ' + status, style: TextStyle(color: statusColor, fontSize: 12, fontWeight: FontWeight.w700)),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
                       _actionChip(
                         icon: Icons.logout,
                         text: 'Logout',

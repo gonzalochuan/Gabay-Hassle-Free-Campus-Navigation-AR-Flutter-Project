@@ -38,11 +38,13 @@ dependencies:
   # QR Code
   qr_flutter: ^4.1.0
   mobile_scanner: ^7.0.1
+  ar_flutter_plugin:
+    path: plugins/ar_flutter_plugin
   
   # Storage & Permissions
   path_provider: ^2.1.2
   screenshot: ^2.0.0
-  permission_handler: ^11.3.0
+  permission_handler: ^11.4.0
   shared_preferences: ^2.2.2
   
   # Utils

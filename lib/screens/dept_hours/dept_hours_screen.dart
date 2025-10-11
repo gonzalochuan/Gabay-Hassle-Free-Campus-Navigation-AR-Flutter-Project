@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../widgets/glass_container.dart';
 import '../../models/department_hours.dart';
 import '../../services/department_hours_service.dart';
+import '../../services/booking_service.dart';
 
 class DeptHoursScreen extends StatefulWidget {
   const DeptHoursScreen({super.key});
@@ -16,6 +17,21 @@ class _DeptHoursScreenState extends State<DeptHoursScreen> {
   List<DepartmentHours> _allDepts = const <DepartmentHours>[];
   String _query = '';
   int _selectedDayIndex = DateTime.now().weekday % 7; // 0=Sun..6=Sat
+  // Booking form state
+  bool _showBooking = false;
+  String _facility = 'AVR';
+  DateTime? _bookingDate = DateTime.now();
+  TimeOfDay? _bookingStart;
+  TimeOfDay? _bookingEnd;
+  final _purposeCtrl = TextEditingController();
+  final _attendeesCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _purposeCtrl.dispose();
+    _attendeesCtrl.dispose();
+    super.dispose();
+  }
 
   List<DepartmentHours> get _filtered {
     final q = _query.trim().toLowerCase();
@@ -24,6 +40,204 @@ class _DeptHoursScreenState extends State<DeptHoursScreen> {
     return base
         .where((d) => d.name.toLowerCase().contains(q) || d.location.toLowerCase().contains(q))
         .toList();
+  }
+
+  Future<void> _showBookingDialog(BuildContext context) async {
+    String facility = 'AVR';
+    DateTime? date = DateTime.now();
+    TimeOfDay? start;
+    TimeOfDay? end;
+    final purposeCtrl = TextEditingController();
+    final attendeesCtrl = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: const Color(0xFF1E2931),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: StatefulBuilder(
+              builder: (ctx, setState) {
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Book Facility', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: facility,
+                      dropdownColor: const Color(0xFF1E2931),
+                      items: const [
+                        DropdownMenuItem(value: 'AVR', child: Text('AVR', style: TextStyle(color: Colors.white))),
+                        DropdownMenuItem(value: 'GYM', child: Text('GYM', style: TextStyle(color: Colors.white))),
+                      ],
+                      onChanged: (v) => setState(() => facility = v ?? 'AVR'),
+                      decoration: InputDecoration(
+                        labelText: 'Facility',
+                        labelStyle: const TextStyle(color: Colors.white70),
+                        filled: true,
+                        fillColor: Colors.white.withOpacity(0.08),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      Expanded(
+                        child: InkWell(
+                          onTap: () async {
+                            final pick = await showDatePicker(
+                              context: ctx,
+                              initialDate: date ?? DateTime.now(),
+                              firstDate: DateTime.now(),
+                              lastDate: DateTime.now().add(const Duration(days: 365)),
+                              builder: (c, child) => Theme(
+                                data: Theme.of(c).copyWith(colorScheme: const ColorScheme.dark(primary: Color(0xFF63C1E3), surface: Color(0xFF1E2931), onSurface: Colors.white)),
+                                child: child!,
+                              ),
+                            );
+                            if (pick != null) setState(() => date = pick);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              date == null ? 'Pick date' : '${date!.year}-${date!.month.toString().padLeft(2, '0')}-${date!.day.toString().padLeft(2, '0')}',
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: InkWell(
+                          onTap: () async {
+                            final t = await showTimePicker(
+                              context: ctx,
+                              initialTime: TimeOfDay.now(),
+                              builder: (c, child) => Theme(
+                                data: Theme.of(c).copyWith(timePickerTheme: const TimePickerThemeData(backgroundColor: Color(0xFF1E2931)), colorScheme: const ColorScheme.dark(primary: Color(0xFF63C1E3), surface: Color(0xFF1E2931), onSurface: Colors.white)),
+                                child: child!,
+                              ),
+                            );
+                            if (t != null) setState(() => start = t);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(start == null ? 'Start time' : start!.format(ctx), style: const TextStyle(color: Colors.white)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: InkWell(
+                          onTap: () async {
+                            final t = await showTimePicker(
+                              context: ctx,
+                              initialTime: TimeOfDay.now(),
+                              builder: (c, child) => Theme(
+                                data: Theme.of(c).copyWith(timePickerTheme: const TimePickerThemeData(backgroundColor: Color(0xFF1E2931)), colorScheme: const ColorScheme.dark(primary: Color(0xFF63C1E3), surface: Color(0xFF1E2931), onSurface: Colors.white)),
+                                child: child!,
+                              ),
+                            );
+                            if (t != null) setState(() => end = t);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(end == null ? 'End time' : end!.format(ctx), style: const TextStyle(color: Colors.white)),
+                          ),
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: purposeCtrl,
+                      style: const TextStyle(color: Colors.white),
+                      cursorColor: Colors.white,
+                      decoration: InputDecoration(
+                        labelText: 'Purpose',
+                        labelStyle: const TextStyle(color: Colors.white70),
+                        filled: true,
+                        fillColor: Colors.white.withOpacity(0.08),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: attendeesCtrl,
+                      keyboardType: TextInputType.number,
+                      style: const TextStyle(color: Colors.white),
+                      cursorColor: Colors.white,
+                      decoration: InputDecoration(
+                        labelText: 'Attendees (optional)',
+                        labelStyle: const TextStyle(color: Colors.white70),
+                        filled: true,
+                        fillColor: Colors.white.withOpacity(0.08),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () async {
+                            if (date == null || start == null || end == null || purposeCtrl.text.trim().isEmpty) return;
+                            String s(String t) => t.padLeft(2, '0');
+                            final st = '${s(start!.hour.toString())}:${s(start!.minute.toString())}';
+                            final et = '${s(end!.hour.toString())}:${s(end!.minute.toString())}';
+                            final attendees = int.tryParse(attendeesCtrl.text.trim());
+                            try {
+                              await BookingService.instance.create(
+                                facility: facility,
+                                date: date!,
+                                startTime: st,
+                                endTime: et,
+                                purpose: purposeCtrl.text.trim(),
+                                attendees: attendees,
+                              );
+                              // ignore: use_build_context_synchronously
+                              Navigator.pop(ctx);
+                              // ignore: use_build_context_synchronously
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Booking submitted')));
+                            } catch (e) {
+                              // ignore: use_build_context_synchronously
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF63C1E3), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                          child: const Text('Submit'),
+                        ),
+                      ],
+                    )
+                  ],
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -62,6 +276,202 @@ class _DeptHoursScreenState extends State<DeptHoursScreen> {
                           onChanged: (v) => setState(() => _query = v),
                         ),
                       ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                GlassContainer(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () => setState(() => _showBooking = !_showBooking),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.14),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.white.withOpacity(0.25)),
+                              ),
+                              child: const Icon(Icons.event_available, color: Colors.white),
+                            ),
+                            const SizedBox(width: 10),
+                            const Expanded(
+                              child: Text('Book Facility (AVR / GYM)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                            ),
+                            Icon(_showBooking ? Icons.expand_less : Icons.expand_more, color: Colors.white70),
+                          ],
+                        ),
+                      ),
+                      if (_showBooking) ...[
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          value: _facility,
+                          dropdownColor: const Color(0xFF1E2931),
+                          items: const [
+                            DropdownMenuItem(value: 'AVR', child: Text('AVR', style: TextStyle(color: Colors.white))),
+                            DropdownMenuItem(value: 'GYM', child: Text('GYM', style: TextStyle(color: Colors.white))),
+                          ],
+                          onChanged: (v) => setState(() => _facility = v ?? 'AVR'),
+                          decoration: InputDecoration(
+                            labelText: 'Facility',
+                            labelStyle: const TextStyle(color: Colors.white70),
+                            filled: true,
+                            fillColor: Colors.white.withOpacity(0.08),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(children: [
+                          Expanded(
+                            child: InkWell(
+                              onTap: () async {
+                                final pick = await showDatePicker(
+                                  context: context,
+                                  initialDate: _bookingDate ?? DateTime.now(),
+                                  firstDate: DateTime.now(),
+                                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                                  builder: (c, child) => Theme(
+                                    data: Theme.of(c).copyWith(colorScheme: const ColorScheme.dark(primary: Color(0xFF63C1E3), surface: Color(0xFF1E2931), onSurface: Colors.white)),
+                                    child: child!,
+                                  ),
+                                );
+                                if (pick != null) setState(() => _bookingDate = pick);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                                decoration: BoxDecoration(color: Colors.white.withOpacity(0.08), borderRadius: BorderRadius.circular(12)),
+                                child: Text(
+                                  _bookingDate == null ? 'Pick date' : '${_bookingDate!.year}-${_bookingDate!.month.toString().padLeft(2, '0')}-${_bookingDate!.day.toString().padLeft(2, '0')}',
+                                  style: const TextStyle(color: Colors.white),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: InkWell(
+                              onTap: () async {
+                                final t = await showTimePicker(
+                                  context: context,
+                                  initialTime: TimeOfDay.now(),
+                                  builder: (c, child) => Theme(
+                                    data: Theme.of(c).copyWith(timePickerTheme: const TimePickerThemeData(backgroundColor: Color(0xFF1E2931)), colorScheme: const ColorScheme.dark(primary: Color(0xFF63C1E3), surface: Color(0xFF1E2931), onSurface: Colors.white)),
+                                    child: child!,
+                                  ),
+                                );
+                                if (t != null) setState(() => _bookingStart = t);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                                decoration: BoxDecoration(color: Colors.white.withOpacity(0.08), borderRadius: BorderRadius.circular(12)),
+                                child: Text(_bookingStart == null ? 'Start time' : _bookingStart!.format(context), style: const TextStyle(color: Colors.white)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: InkWell(
+                              onTap: () async {
+                                final t = await showTimePicker(
+                                  context: context,
+                                  initialTime: TimeOfDay.now(),
+                                  builder: (c, child) => Theme(
+                                    data: Theme.of(c).copyWith(timePickerTheme: const TimePickerThemeData(backgroundColor: Color(0xFF1E2931)), colorScheme: const ColorScheme.dark(primary: Color(0xFF63C1E3), surface: Color(0xFF1E2931), onSurface: Colors.white)),
+                                    child: child!,
+                                  ),
+                                );
+                                if (t != null) setState(() => _bookingEnd = t);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                                decoration: BoxDecoration(color: Colors.white.withOpacity(0.08), borderRadius: BorderRadius.circular(12)),
+                                child: Text(_bookingEnd == null ? 'End time' : _bookingEnd!.format(context), style: const TextStyle(color: Colors.white)),
+                              ),
+                            ),
+                          ),
+                        ]),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _purposeCtrl,
+                          style: const TextStyle(color: Colors.white),
+                          cursorColor: Colors.white,
+                          decoration: InputDecoration(
+                            labelText: 'Purpose',
+                            labelStyle: const TextStyle(color: Colors.white70),
+                            filled: true,
+                            fillColor: Colors.white.withOpacity(0.08),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _attendeesCtrl,
+                          keyboardType: TextInputType.number,
+                          style: const TextStyle(color: Colors.white),
+                          cursorColor: Colors.white,
+                          decoration: InputDecoration(
+                            labelText: 'Attendees (optional)',
+                            labelStyle: const TextStyle(color: Colors.white70),
+                            filled: true,
+                            fillColor: Colors.white.withOpacity(0.08),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              if (_bookingDate == null || _bookingStart == null || _bookingEnd == null || _purposeCtrl.text.trim().isEmpty) return;
+                              String s2(int v) => v.toString().padLeft(2, '0');
+                              final st = '${s2(_bookingStart!.hour)}:${s2(_bookingStart!.minute)}';
+                              final et = '${s2(_bookingEnd!.hour)}:${s2(_bookingEnd!.minute)}';
+                              final startMinutes = _bookingStart!.hour * 60 + _bookingStart!.minute;
+                              final endMinutes = _bookingEnd!.hour * 60 + _bookingEnd!.minute;
+                              if (startMinutes >= endMinutes) {
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Start time must be before end time.')));
+                                return;
+                              }
+                              final attendees = int.tryParse(_attendeesCtrl.text.trim());
+                              try {
+                                await BookingService.instance.create(
+                                  facility: _facility,
+                                  date: _bookingDate!,
+                                  startTime: st,
+                                  endTime: et,
+                                  purpose: _purposeCtrl.text.trim(),
+                                  attendees: attendees,
+                                );
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Booking submitted')));
+                                setState(() {
+                                  _showBooking = false;
+                                  _facility = 'AVR';
+                                  _bookingDate = DateTime.now();
+                                  _bookingStart = null;
+                                  _bookingEnd = null;
+                                  _purposeCtrl.clear();
+                                  _attendeesCtrl.clear();
+                                });
+                              } catch (e) {
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(backgroundColor: _accent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                            child: const Text('Submit Booking'),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
